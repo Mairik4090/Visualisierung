@@ -1,0 +1,9 @@
+{
+  "name": "Placeholder KI Stammbaum",
+  "version": "1.0",
+  "description": "This is placeholder data. Replace with actual ki-stammbaum.json content.",
+  "nodes": [
+    {"id": "1", "name": "Node A"},
+    {"id": "2", "name": "Node B"}
+  ]
+}
