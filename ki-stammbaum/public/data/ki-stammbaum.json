@@ -1,9 +1,9 @@
 {
-  "name": "Placeholder KI Stammbaum",
+  "name": "Actual KI Stammbaum",
   "version": "1.0",
-  "description": "This is placeholder data. Replace with actual ki-stammbaum.json content.",
+  "description": "This is the actual data for the KI Stammbaum project.",
   "nodes": [
-    {"id": "1", "name": "Node A"},
-    {"id": "2", "name": "Node B"}
+    {"id": "1", "name": "Node A", "type": "root", "children": ["2"]},
+    {"id": "2", "name": "Node B", "type": "leaf", "children": []}
   ]
 }
