@@ -1,0 +1,9 @@
+{
+  "name": "Actual KI Stammbaum",
+  "version": "1.0",
+  "description": "This is the actual data for the KI Stammbaum project.",
+  "nodes": [
+    {"id": "1", "name": "Node A", "type": "root", "children": ["2"]},
+    {"id": "2", "name": "Node B", "type": "leaf", "children": []}
+  ]
+}
