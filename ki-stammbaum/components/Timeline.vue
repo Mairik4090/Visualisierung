@@ -1,5 +1,11 @@
 <template>
-  <svg ref="svg" class="timeline-svg" aria-label="Zeitstrahl" />
+  <div class="timeline-container">
+    <svg ref="svg" class="timeline-svg" aria-label="Zeitstrahl" />
+    <div class="zoom-controls">
+      <button type="button" class="zoom-in" @click="zoomIn">+</button>
+      <button type="button" class="zoom-out" @click="zoomOut">−</button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -17,6 +23,21 @@ const emit = defineEmits<{
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
+let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
+
+/** Zoomt den Zeitstrahl hinein */
+function zoomIn(): void {
+  if (svg.value && zoomBehavior) {
+    zoomBehavior.scaleBy(d3.select(svg.value), 1.2);
+  }
+}
+
+/** Zoomt den Zeitstrahl heraus */
+function zoomOut(): void {
+  if (svg.value && zoomBehavior) {
+    zoomBehavior.scaleBy(d3.select(svg.value), 1 / 1.2);
+  }
+}
 
 function render(): void {
   if (!svg.value || !props.nodes || props.nodes.length === 0) return;
@@ -69,7 +90,7 @@ function render(): void {
   emit('rangeChanged', [minYear, maxYear]);
 
   // Zoom- und Pan-Interaktion
-  const zoom = d3.zoom<SVGSVGElement, unknown>()
+  zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([1, 8])
     .translateExtent([
       [margin.left, 0],
@@ -88,7 +109,7 @@ function render(): void {
       emit('rangeChanged', zx.domain() as [number, number]);
     });
 
-  svgSel.call(zoom as any);
+  svgSel.call(zoomBehavior as any);
 }
 
 onMounted(render);
@@ -100,9 +121,32 @@ watch(
 </script>
 
 <style scoped>
+.timeline-container {
+  position: relative;
+}
+
 .timeline-svg {
   width: 100%;
   height: 100px;
   cursor: grab;
+}
+
+.zoom-controls {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoom-controls button {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.25rem;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
 }
 </style>
