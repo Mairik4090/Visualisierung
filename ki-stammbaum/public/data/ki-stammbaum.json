@@ -1,9 +1,144 @@
+Gerne, hier ist die `ki-stammbaum.json` basierend auf deiner bereitgestellten Struktur. Ich habe sie mit beispielhaften KI-Konzepten, ihren Entstehungsjahren und Abhängigkeiten befüllt, um die "Evolution der künstlichen Intelligenz" darzustellen.
+
+```json
 {
-  "name": "Actual KI Stammbaum",
+  "name": "KI Stammbaum",
   "version": "1.0",
-  "description": "This is the actual data for the KI Stammbaum project.",
+  "description": "Eine interaktive Reise durch die Evolution der künstlichen Intelligenz, dargestellt als Stammbaum von KI-Konzepten.",
   "nodes": [
-    {"id": "1", "name": "Node A", "type": "root", "children": ["2"]},
-    {"id": "2", "name": "Node B", "type": "leaf", "children": []}
+    {
+      "id": "1",
+      "name": "Logik",
+      "year": 384,
+      "description": "Die formale Untersuchung von Argumentation, ein Fundament für KI, beginnend mit Aristoteles' Syllogistik.",
+      "dependencies": []
+    },
+    {
+      "id": "2",
+      "name": "Philosophie des Geistes",
+      "year": 1600,
+      "description": "Erkundet die Natur des Bewusstseins, des Denkens und des Geistes. Bedeutend für die Frage, was Intelligenz ist.",
+      "dependencies": ["1"]
+    },
+    {
+      "id": "3",
+      "name": "Mathematische Logik",
+      "year": 1847,
+      "description": "Die Anwendung formaler Logik auf mathematische Probleme. Wichtige Pioniere sind George Boole und Augustus De Morgan.",
+      "dependencies": ["1"]
+    },
+    {
+      "id": "4",
+      "name": "Kybernetik",
+      "year": 1948,
+      "description": "Die Wissenschaft der Steuerung und Kommunikation in Tieren und Maschinen. Ein frühes interdisziplinäres Feld, das die KI maßgeblich beeinflusste.",
+      "dependencies": ["2", "3"]
+    },
+    {
+      "id": "5",
+      "name": "Turing-Test",
+      "year": 1950,
+      "description": "Ein Test zur Beurteilung der Fähigkeit einer Maschine, intelligentes Verhalten zu zeigen, das von einem menschlichen Verhalten nicht zu unterscheiden ist.",
+      "dependencies": ["2", "4"]
+    },
+    {
+      "id": "6",
+      "name": "Künstliche Neuronale Netze (Perzeptron)",
+      "year": 1957,
+      "description": "Ein frühes Modell eines künstlichen Neurons, das auf biologischen Neuronen basiert und für einfache Mustererkennung verwendet wurde.",
+      "dependencies": ["3", "4"]
+    },
+    {
+      "id": "7",
+      "name": "Logisches Denken und Problemlösung (Logic Theorist)",
+      "year": 1956,
+      "description": "Eines der ersten KI-Programme, das logische Theoreme beweisen konnte. Wegweisend für symbolische KI.",
+      "dependencies": ["3"]
+    },
+    {
+      "id": "8",
+      "name": "Symbolische KI (Expertensysteme)",
+      "year": 1970,
+      "description": "KI-Systeme, die menschliches Expertenwissen in Form von Regeln repräsentieren und inferieren.",
+      "dependencies": ["7"]
+    },
+    {
+      "id": "9",
+      "name": "Maschinelles Lernen (statistisch)",
+      "year": 1980,
+      "description": "Ansatz, bei dem Algorithmen aus Daten lernen, um Vorhersagen zu treffen oder Muster zu erkennen, basierend auf statistischen Methoden.",
+      "dependencies": ["3"]
+    },
+    {
+      "id": "10",
+      "name": "Backpropagation",
+      "year": 1986,
+      "description": "Ein Algorithmus zum Trainieren von künstlichen neuronalen Netzen, der die Fehler eines Netzes rückwärts durch die Schichten propagiert.",
+      "dependencies": ["6", "9"]
+    },
+    {
+      "id": "11",
+      "name": "Deep Learning",
+      "year": 2006,
+      "description": "Eine Unterkategorie des maschinellen Lernens, die tiefe neuronale Netze mit vielen Schichten verwendet, um komplexe Muster in großen Datenmengen zu lernen.",
+      "dependencies": ["6", "10"]
+    },
+    {
+      "id": "12",
+      "name": "Computer Vision",
+      "year": 1966,
+      "description": "Forschungsfeld, das Computern das 'Sehen' und Interpretieren visueller Informationen ermöglicht.",
+      "dependencies": ["4", "6", "9"]
+    },
+    {
+      "id": "13",
+      "name": "Natürliche Sprachverarbeitung (NLP)",
+      "year": 1950,
+      "description": "Das Feld der KI, das sich mit der Interaktion zwischen Computern und menschlicher (natürlicher) Sprache beschäftigt.",
+      "dependencies": ["3", "5"]
+    },
+    {
+      "id": "14",
+      "name": "Robotertechnik",
+      "year": 1950,
+      "description": "Das Design, die Konstruktion, der Betrieb und die Anwendung von Robotern.",
+      "dependencies": ["4"]
+    },
+    {
+      "id": "15",
+      "name": "Reinforcement Learning",
+      "year": 1989,
+      "description": "Ein Bereich des maschinellen Lernens, bei dem ein Agent lernt, Entscheidungen zu treffen, indem er Belohnungen und Strafen in einer Umgebung empfängt.",
+      "dependencies": ["9", "10"]
+    },
+    {
+      "id": "16",
+      "name": "Generative Adversarial Networks (GANs)",
+      "year": 2014,
+      "description": "Eine Klasse von Deep-Learning-Systemen, die zwei neuronale Netze (Generator und Diskriminator) in einem Nullsummenspiel trainieren.",
+      "dependencies": ["11"]
+    },
+    {
+      "id": "17",
+      "name": "Transformer-Architektur",
+      "year": 2017,
+      "description": "Eine neuronale Netzwerkarchitektur, die auf dem Mechanismus der Selbstaufmerksamkeit basiert und revolutionär für die NLP war.",
+      "dependencies": ["11", "13"]
+    },
+    {
+      "id": "18",
+      "name": "Große Sprachmodelle (LLMs)",
+      "year": 2018,
+      "description": "Künstliche neuronale Netze mit vielen Parametern, die auf riesigen Textdatensätzen trainiert werden und natürliche Sprache verstehen und generieren können.",
+      "dependencies": ["13", "17"]
+    },
+    {
+      "id": "19",
+      "name": "KI-Ethik und Sicherheit",
+      "year": 2000,
+      "description": "Die Untersuchung und Entwicklung von Prinzipien für den verantwortungsvollen Einsatz von KI, einschließlich Fragen der Fairness, Transparenz und potenzieller Risiken.",
+      "dependencies": ["2", "8"]
+    }
   ]
 }
+```
