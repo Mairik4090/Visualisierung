@@ -4,7 +4,7 @@
  */
 import { shallowRef, type Ref } from 'vue';
 // Nuxt helper to prepend the configured base path when fetching assets
-import { withBase } from '#imports';
+import { withBase } from '#app';
 
 /**
  * Interface für die Struktur der Stammbaum-Daten
