@@ -9,6 +9,8 @@ Datenänderungen oder nach dem Mount automatisch neu gezeichnet.
 
 - `nodes` – Liste der Knotenobjekte (`id`, `name`, `year`). Die horizontale Position eines Knotens richtet sich nach dem Jahr.
 - `links` – Liste der Verbindungen zwischen den Knoten (`source`, `target`).
+- `usePhysics` – aktiviert die D3-Force-Simulation (Standard: `true`). Bei
+  `false` werden die Knoten nur anhand ihres Jahres positioniert.
 
 ## Emits
 
