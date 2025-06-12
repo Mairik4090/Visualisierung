@@ -2,11 +2,14 @@
   <div>
     <header class="site-header">
       <nav>
-        <NuxtLink to="/">Start</NuxtLink>
-        |
-        <NuxtLink to="/stammbaum">Stammbaum</NuxtLink>
-        |
-        <NuxtLink to="/about">Über</NuxtLink>
+        <NuxtLink
+          v-for="route in pageRoutes"
+          :key="route.path"
+          :to="route.path"
+          class="nav-link"
+        >
+          {{ route.meta.title || route.name }}
+        </NuxtLink>
       </nav>
     </header>
     <main>
@@ -19,7 +22,16 @@
 </template>
 
 <script setup lang="ts">
-// Grundlayout für alle Seiten
+// Grundlayout mit automatischer Navigation
+import { computed } from 'vue';
+
+const router = useRouter();
+const pageRoutes = computed(() =>
+  router
+    .getRoutes()
+    .filter((r) => r.path !== '/' && r.path !== '/:pathMatch(.*)*')
+    .sort((a, b) => a.path.localeCompare(b.path)),
+);
 </script>
 
 <style scoped>
