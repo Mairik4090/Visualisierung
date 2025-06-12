@@ -27,30 +27,19 @@
   import * as d3 from 'd3';
   import type { Node, Link } from '@/types/concept';
 
-  /** Node definition extended with optional name for labels */
   interface GraphNode extends Node {
     name?: string;
   }
 
-  /**
-   * Eingehende Daten für die Darstellung des KI-Stammbaums.
-   * Beide Properties sind optional, um flexibel mit verschiedenen Datenquellen zu arbeiten.
-   */
   const props = withDefaults(
     defineProps<{
       nodes?: GraphNode[];
       links?: Link[];
       usePhysics?: boolean;
     }>(),
-    {
-      usePhysics: true,
-    },
+    { usePhysics: true },
   );
 
-  /**
-   * Event-Emitter für Kommunikation mit der Parent-Komponente.
-   * Wird ausgelöst, wenn ein Benutzer auf einen Knoten klickt.
-   */
   const emit = defineEmits<{
     conceptSelected: [node: GraphNode];
   }>();
@@ -67,41 +56,39 @@
   let simulation: d3.Simulation<GraphNode, undefined> | null = null;
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
-  /**
-   * Render-Funktion erzeugt die Visualisierung des Stammbaums.
-   * Verwendet D3.js für die dynamische SVG-Generierung und Interaktivität.
-   */
   function render(): void {
-    // Frühzeitiger Ausstieg, falls SVG-Element noch nicht verfügbar
     if (!svg.value || !props.nodes || props.nodes.length === 0) return;
-
-    // Vorherige Simulation beenden
     simulation?.stop();
 
-    // D3-Selektion des SVG-Elements
     const svgSel = d3.select(svg.value);
-
-    // Vorherige Inhalte entfernen für saubere Neuzeichnung
     svgSel.selectAll('*').remove();
 
-    // Dynamische Größenbestimmung basierend auf Container
     const width = svg.value.clientWidth || 600;
     const height = svg.value.clientHeight || 400;
 
-    // ViewBox für responsive Skalierung setzen
     svgSel
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
 
-    // Zeitskala für horizontale Positionierung der Knoten erstellen
+    // X-Skala nach Jahr
     const years = props.nodes.map((d) => d.year);
     const xScale = d3
       .scaleLinear()
       .domain(d3.extent(years) as [number, number])
-      .range([40, width - 40]); // Rand von 40px links und rechts
+      .range([40, width - 40]);
 
-    // Farbskala
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    // Kategorien und Y-Skala
+    const categories = Array.from(new Set(props.nodes.map((d) => d.category)));
+    const yScale = d3
+      .scalePoint<string>()
+      .domain(categories)
+      .range([40, height - 40]);
+
+    // Farbskala pro Kategorie
+    const color = d3
+      .scaleOrdinal<string>()
+      .domain(categories)
+      .range(d3.schemeCategory10);
 
     // Hauptgruppe für alle grafischen Elemente
     const g = svgSel.append('g');
@@ -116,7 +103,7 @@
       });
     svgSel.call(zoomBehavior as any);
 
-    // Linien für die Links erstellen
+    // Links zeichnen
     const link = g
       .append('g')
       .attr('stroke', '#999')
@@ -126,7 +113,7 @@
       .join('line')
       .attr('stroke-width', 1.5);
 
-    // Gruppe für die Knoten
+    // Knoten zeichnen
     const node = g
       .append('g')
       .attr('stroke', '#fff')
@@ -135,11 +122,11 @@
       .data(props.nodes, (d: any) => d.id)
       .join('circle')
       .attr('r', 6)
-      .attr('fill', (d: any, i) => color(String(i)))
+      .attr('fill', (d: any) => color(d.category!))
       .style('cursor', 'pointer')
-      .on('click', (_event, d) => emit('conceptSelected', d as GraphNode));
+      .on('click', (_e, d) => emit('conceptSelected', d as GraphNode));
 
-    // Textlabels für jeden Knoten hinzufügen
+    // Labels hinzufügen
     const labels = g
       .append('g')
       .selectAll('text')
@@ -159,7 +146,6 @@
     );
 
     if (props.usePhysics) {
-      // Simulation mit Kräften initialisieren
       simulation = d3
         .forceSimulation(props.nodes)
         .force(
@@ -172,18 +158,22 @@
         .force('charge', d3.forceManyBody().strength(-120))
         .force(
           'x',
-          d3.forceX((d: any) => xScale(d.year)),
+          d3.forceX((d: any) => (d as any)._x),
         )
-        .force('y', d3.forceY(height / 2).strength(0.05))
+        .force('y', d3.forceY((d: any) => (d as any)._y).strength(0.1))
         .on('tick', ticked);
     } else {
-      node.attr('cx', (d: any) => xScale(d.year)).attr('cy', height / 2);
-      labels.attr('x', (d: any) => xScale(d.year)).attr('y', height / 2 - 12);
+      node
+        .attr('cx', (d: any) => (d as any)._x)
+        .attr('cy', (d: any) => (d as any)._y);
+      labels
+        .attr('x', (d: any) => (d as any)._x)
+        .attr('y', (d: any) => (d as any)._y - 12);
       link
-        .attr('x1', (d: any) => xScale((d.source as GraphNode).year))
-        .attr('y1', height / 2)
-        .attr('x2', (d: any) => xScale((d.target as GraphNode).year))
-        .attr('y2', height / 2);
+        .attr('x1', (d: any) => (d.source as any)._x)
+        .attr('y1', (d: any) => (d.source as any)._y)
+        .attr('x2', (d: any) => (d.target as any)._x)
+        .attr('y2', (d: any) => (d.target as any)._y);
     }
 
     function ticked() {
@@ -192,7 +182,6 @@
         .attr('y1', (d: any) => (d.source as GraphNode).y)
         .attr('x2', (d: any) => (d.target as GraphNode).x)
         .attr('y2', (d: any) => (d.target as GraphNode).y);
-
       node.attr('cx', (d: any) => d.x).attr('cy', (d: any) => d.y);
       labels.attr('x', (d: any) => d.x).attr('y', (d: any) => (d.y ?? 0) - 12);
     }
@@ -238,12 +227,7 @@
     resizeObserver?.disconnect();
   });
 
-  // Bei Änderungen der Props neu rendern
-  watch(
-    () => [props.nodes, props.links],
-    render,
-    { deep: true }, // Tiefe Überwachung für verschachtelte Objekte
-  );
+  watch(() => [props.nodes, props.links], render, { deep: true });
 
   watch(
     () => props.usePhysics,
@@ -255,10 +239,9 @@
 </script>
 
 <style scoped>
-  /* Hauptcontainer für die Stammbaum-Visualisierung */
   .ki-stammbaum-container {
     width: 100%;
-    height: 80vh; /* Beispielhöhe - anpassbar je nach Layout-Anforderungen */
+    height: 80vh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -267,7 +250,6 @@
     box-sizing: border-box;
   }
 
-  /* Überschrift der Visualisierung */
   .ki-stammbaum-container h2 {
     margin-bottom: 20px;
     color: #333;
@@ -284,7 +266,6 @@
     cursor: grab;
   }
 
-  /* Styling für Ladetext */
   .ki-stammbaum-svg text {
     font-family: 'Arial', sans-serif;
     fill: #666;
