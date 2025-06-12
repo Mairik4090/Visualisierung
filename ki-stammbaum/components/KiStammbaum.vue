@@ -23,179 +23,179 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, onBeforeUnmount, ref, watch, withDefaults } from 'vue';
-  import * as d3 from 'd3';
-  import type { Node, Link } from '@/types/concept';
+import { onMounted, onBeforeUnmount, ref, watch, withDefaults } from 'vue';
+import * as d3 from 'd3';
+import type { Node, Link } from '@/types/concept';
 
-  /** Node definition extended with optional name for labels */
-  interface GraphNode extends Node {
-    name?: string;
-  }
+interface GraphNode extends Node {
+  name?: string;
+}
 
-  /**
-   * Eingehende Daten für die Darstellung des KI-Stammbaums.
-   * Beide Properties sind optional, um flexibel mit verschiedenen Datenquellen zu arbeiten.
-   */
-  const props = withDefaults(
-    defineProps<{
-      nodes?: GraphNode[];
-      links?: Link[];
-      usePhysics?: boolean;
-    }>(),
-    {
-      usePhysics: true,
-    },
-  );
+const props = withDefaults(
+  defineProps<{
+    nodes?: GraphNode[];
+    links?: Link[];
+    usePhysics?: boolean;
+  }>(),
+  { usePhysics: true },
+);
 
-  /**
-   * Event-Emitter für Kommunikation mit der Parent-Komponente.
-   * Wird ausgelöst, wenn ein Benutzer auf einen Knoten klickt.
-   */
-  const emit = defineEmits<{
-    conceptSelected: [node: GraphNode];
-  }>();
+const emit = defineEmits<{
+  conceptSelected: [node: GraphNode];
+}>();
 
-/** 
- * SVG-Referenz für alle D3-Manipulationen 
- * Wird verwendet, um das DOM-Element direkt mit D3.js zu steuern
- */
 const svg = ref<SVGSVGElement | null>(null);
 const container = ref<HTMLElement | null>(null);
 let resizeObserver: ResizeObserver | null = null;
-
-/** Aktuelle D3-Simulation zur späteren Bereinigung */
 let simulation: d3.Simulation<GraphNode, undefined> | null = null;
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
-  /**
-   * Render-Funktion erzeugt die Visualisierung des Stammbaums.
-   * Verwendet D3.js für die dynamische SVG-Generierung und Interaktivität.
-   */
-  function render(): void {
-    // Frühzeitiger Ausstieg, falls SVG-Element noch nicht verfügbar
-    if (!svg.value || !props.nodes || props.nodes.length === 0) return;
+function render(): void {
+  if (!svg.value || !props.nodes || props.nodes.length === 0) return;
+  simulation?.stop();
 
-    // Vorherige Simulation beenden
-    simulation?.stop();
+  const svgSel = d3.select(svg.value);
+  svgSel.selectAll('*').remove();
 
-    // D3-Selektion des SVG-Elements
-    const svgSel = d3.select(svg.value);
+  const width = svg.value.clientWidth || 600;
+  const height = svg.value.clientHeight || 400;
 
-    // Vorherige Inhalte entfernen für saubere Neuzeichnung
-    svgSel.selectAll('*').remove();
+  svgSel
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
 
-    // Dynamische Größenbestimmung basierend auf Container
-    const width = svg.value.clientWidth || 600;
-    const height = svg.value.clientHeight || 400;
+  // X-Skala nach Jahr
+  const years = props.nodes.map((d) => d.year);
+  const xScale = d3
+    .scaleLinear()
+    .domain(d3.extent(years) as [number, number])
+    .range([40, width - 40]);
 
-    // ViewBox für responsive Skalierung setzen
-    svgSel
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('preserveAspectRatio', 'xMidYMid meet');
+  // Kategorien und Y-Skala
+  const categories = Array.from(new Set(props.nodes.map((d) => d.category)));
+  const yScale = d3
+    .scalePoint<string>()
+    .domain(categories)
+    .range([40, height - 40]);
 
-    // Zeitskala für horizontale Positionierung der Knoten erstellen
-    const years = props.nodes.map((d) => d.year);
-    const xScale = d3
-      .scaleLinear()
-      .domain(d3.extent(years) as [number, number])
-      .range([40, width - 40]); // Rand von 40px links und rechts
+  // Farbskala pro Kategorie
+  const color = d3
+    .scaleOrdinal<string>()
+    .domain(categories)
+    .range(d3.schemeCategory10);
 
-    // Farbskala
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
+  // Cluster-Offsets berechnen
+  const groupCounts = new Map<string, number>();
+  props.nodes.forEach((n) => {
+    const key = `${n.year}-${n.category}`;
+    groupCounts.set(key, (groupCounts.get(key) ?? 0) + 1);
+  });
+  const groupIndex = new Map<string, number>();
+  props.nodes.forEach((n) => {
+    const key = `${n.year}-${n.category}`;
+    const idx = groupIndex.get(key) ?? 0;
+    groupIndex.set(key, idx + 1);
+    const offset = idx - (groupCounts.get(key)! - 1) / 2;
+    (n as any)._offset = offset;
+    (n as any)._x = xScale(n.year) + offset * 12;
+    (n as any)._y = yScale(n.category!);
+  });
 
-  // Hauptgruppe für alle grafischen Elemente
+  // Gruppe für alles
   const g = svgSel.append('g');
 
-  // Zoom- und Pan-Interaktion auf das gesamte SVG anwenden
+  // Zoom-/Pan-Verhalten
   zoomBehavior = d3
     .zoom<SVGSVGElement, unknown>()
     .scaleExtent([0.5, 5])
     .on('zoom', (ev) => {
-      const { x, k } = ev.transform;
-      g.attr('transform', `translate(${x},0) scale(${k})`);
+      g.attr('transform', ev.transform.toString());
     });
   svgSel.call(zoomBehavior as any);
 
-    // Linien für die Links erstellen
-    const link = g
-      .append('g')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', 0.6)
-      .selectAll('line')
-      .data(props.links ?? [])
-      .join('line')
-      .attr('stroke-width', 1.5);
+  // Links zeichnen
+  const link = g
+    .append('g')
+    .attr('stroke', '#999')
+    .attr('stroke-opacity', 0.6)
+    .selectAll('line')
+    .data(props.links ?? [])
+    .join('line')
+    .attr('stroke-width', 1.5);
 
-    // Gruppe für die Knoten
-    const node = g
-      .append('g')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
-      .selectAll('circle')
-      .data(props.nodes, (d: any) => d.id)
-      .join('circle')
-      .attr('r', 6)
-      .attr('fill', (d: any, i) => color(String(i)))
-      .style('cursor', 'pointer')
-      .on('click', (_event, d) => emit('conceptSelected', d as GraphNode));
+  // Knoten zeichnen
+  const node = g
+    .append('g')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .selectAll('circle')
+    .data(props.nodes, (d: any) => d.id)
+    .join('circle')
+    .attr('r', 6)
+    .attr('fill', (d: any) => color(d.category!))
+    .style('cursor', 'pointer')
+    .on('click', (_e, d) => emit('conceptSelected', d as GraphNode));
 
-    // Textlabels für jeden Knoten hinzufügen
-    const labels = g
-      .append('g')
-      .selectAll('text')
-      .data(props.nodes, (d: any) => d.id)
-      .join('text')
-      .attr('text-anchor', 'middle')
-      .style('font-size', '10px')
-      .style('fill', '#333')
-      .text((d) => d.name ?? d.id);
+  // Labels hinzufügen
+  const labels = g
+    .append('g')
+    .selectAll('text')
+    .data(props.nodes, (d: any) => d.id)
+    .join('text')
+    .attr('text-anchor', 'middle')
+    .style('font-size', '10px')
+    .style('fill', '#333')
+    .text((d) => d.name ?? d.id);
 
-    node.call(
-      d3
-        .drag<SVGCircleElement, GraphNode>()
-        .on('start', dragStarted)
-        .on('drag', dragged)
-        .on('end', dragEnded),
-    );
+  node.call(
+    d3
+      .drag<SVGCircleElement, GraphNode>()
+      .on('start', dragStarted)
+      .on('drag', dragged)
+      .on('end', dragEnded),
+  );
 
-    if (props.usePhysics) {
-      // Simulation mit Kräften initialisieren
-      simulation = d3
-        .forceSimulation(props.nodes)
-        .force(
-          'link',
-          d3
-            .forceLink(props.links ?? [])
-            .id((d: any) => d.id)
-            .distance(60),
-        )
-        .force('charge', d3.forceManyBody().strength(-120))
-        .force(
-          'x',
-          d3.forceX((d: any) => xScale(d.year)),
-        )
-        .force('y', d3.forceY(height / 2).strength(0.05))
-        .on('tick', ticked);
-    } else {
-      node.attr('cx', (d: any) => xScale(d.year)).attr('cy', height / 2);
-      labels.attr('x', (d: any) => xScale(d.year)).attr('y', height / 2 - 12);
-      link
-        .attr('x1', (d: any) => xScale((d.source as GraphNode).year))
-        .attr('y1', height / 2)
-        .attr('x2', (d: any) => xScale((d.target as GraphNode).year))
-        .attr('y2', height / 2);
-    }
+  if (props.usePhysics) {
+    simulation = d3
+      .forceSimulation(props.nodes)
+      .force(
+        'link',
+        d3
+          .forceLink(props.links ?? [])
+          .id((d: any) => d.id)
+          .distance(60),
+      )
+      .force('charge', d3.forceManyBody().strength(-120))
+      .force('x', d3.forceX((d: any) => (d as any)._x))
+      .force('y', d3.forceY((d: any) => (d as any)._y).strength(0.1))
+      .on('tick', ticked);
+  } else {
+    node
+      .attr('cx', (d: any) => (d as any)._x)
+      .attr('cy', (d: any) => (d as any)._y);
+    labels
+      .attr('x', (d: any) => (d as any)._x)
+      .attr('y', (d: any) => (d as any)._y - 12);
+    link
+      .attr('x1', (d: any) => (d.source as any)._x)
+      .attr('y1', (d: any) => (d.source as any)._y)
+      .attr('x2', (d: any) => (d.target as any)._x)
+      .attr('y2', (d: any) => (d.target as any)._y);
+  }
 
-    function ticked() {
-      link
-        .attr('x1', (d: any) => (d.source as GraphNode).x)
-        .attr('y1', (d: any) => (d.source as GraphNode).y)
-        .attr('x2', (d: any) => (d.target as GraphNode).x)
-        .attr('y2', (d: any) => (d.target as GraphNode).y);
-
-      node.attr('cx', (d: any) => d.x).attr('cy', (d: any) => d.y);
-      labels.attr('x', (d: any) => d.x).attr('y', (d: any) => (d.y ?? 0) - 12);
-    }
+  function ticked() {
+    link
+      .attr('x1', (d: any) => (d.source as GraphNode).x)
+      .attr('y1', (d: any) => (d.source as GraphNode).y)
+      .attr('x2', (d: any) => (d.target as GraphNode).x)
+      .attr('y2', (d: any) => (d.target as GraphNode).y);
+    node
+      .attr('cx', (d: any) => d.x)
+      .attr('cy', (d: any) => d.y);
+    labels
+      .attr('x', (d: any) => d.x)
+      .attr('y', (d: any) => (d.y ?? 0) - 12);
+  }
 
   function dragStarted(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
     event.sourceEvent?.stopPropagation();
@@ -218,69 +218,58 @@ let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
   }
 }
 
-  // Komponente nach dem Mounting rendern
-
 onMounted(() => {
   render();
   resizeObserver = new ResizeObserver(() => render());
   if (container.value) resizeObserver.observe(container.value);
 });
 
-// Simulation und ResizeObserver beim Unmount stoppen, um Speicherlecks zu vermeiden
 onBeforeUnmount(() => {
   simulation?.stop();
   resizeObserver?.disconnect();
 });
 
-  // Bei Änderungen der Props neu rendern
-  watch(
-    () => [props.nodes, props.links],
-    render,
-    { deep: true }, // Tiefe Überwachung für verschachtelte Objekte
-  );
+watch(
+  () => [props.nodes, props.links],
+  render,
+  { deep: true },
+);
 
-  watch(
-    () => props.usePhysics,
-    () => {
-      if (!props.usePhysics) simulation?.stop();
-      render();
-    },
-  );
+watch(() => props.usePhysics, () => {
+  if (!props.usePhysics) simulation?.stop();
+  render();
+});
 </script>
 
 <style scoped>
-  /* Hauptcontainer für die Stammbaum-Visualisierung */
-  .ki-stammbaum-container {
-    width: 100%;
-    height: 80vh; /* Beispielhöhe - anpassbar je nach Layout-Anforderungen */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    box-sizing: border-box;
-  }
+.ki-stammbaum-container {
+  width: 100%;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
 
-  /* Überschrift der Visualisierung */
-  .ki-stammbaum-container h2 {
-    margin-bottom: 20px;
-    color: #333;
-    font-size: 1.5rem;
-  }
+.ki-stammbaum-container h2 {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5rem;
+}
 
-/* SVG-Element für die D3.js-Visualisierung */
 .ki-stammbaum-svg {
   width: 100%;
   height: 100%;
-  border: 1px solid #ccc; /* Visueller Platzhalter während der Entwicklung */
+  border: 1px solid #ccc;
   border-radius: 4px;
-  background-color: #fafafa; /* Leichter Hintergrund für bessere Sichtbarkeit */
+  background-color: #fafafa;
   cursor: grab;
 }
 
-  /* Styling für Ladetext */
-  .ki-stammbaum-svg text {
-    font-family: 'Arial', sans-serif;
-    fill: #666;
-  }
+.ki-stammbaum-svg text {
+  font-family: 'Arial', sans-serif;
+  fill: #666;
+}
 </style>
