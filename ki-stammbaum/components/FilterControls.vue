@@ -19,19 +19,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineEmits } from 'vue';
+import { ref, watch, defineEmits } from 'vue';
+import { useStammbaumStore } from '@/stores/stammbaum';
 
 const emit = defineEmits(['filtersApplied']);
 
-const yearFilter = ref<number | null>(null);
-const typeFilter = ref<string>('');
+const store = useStammbaumStore();
+
+const yearFilter = ref<number | null>(store.filters.year);
+const typeFilter = ref<string>(store.filters.type);
+
+watch(
+  () => store.filters,
+  (f) => {
+    yearFilter.value = f.year;
+    typeFilter.value = f.type;
+  },
+  { deep: true },
+);
 
 function applyFilters() {
   const filters = {
     year: yearFilter.value,
     type: typeFilter.value,
   };
-  console.log('Filter angewendet:', filters);
+  store.setFilters(filters);
   emit('filtersApplied', filters);
 }
 </script>

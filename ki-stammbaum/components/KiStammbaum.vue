@@ -11,8 +11,10 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import { useStammbaumData } from '@/composables/useStammbaumData';
+import { useStammbaumStore } from '@/stores/stammbaum';
 
 const emit = defineEmits(['conceptSelected']);
+const store = useStammbaumStore();
 
 const svg = ref<SVGSVGElement | null>(null);
 const { data, pending } = useStammbaumData();
@@ -24,11 +26,30 @@ watch(data, (newData) => {
   }
 }, { immediate: true });
 
+watch(
+  () => store.filters,
+  () => {
+    console.log('Filter geändert:', store.filters);
+    // Bei echten D3-Implementierungen würde hier neu gerendert werden
+  },
+  { deep: true },
+);
+
 onMounted(() => {
   console.log('KiStammbaum Komponente mounted. SVG-Element:', svg.value);
 });
 
+watch(
+  () => store.conceptId,
+  (id) => {
+    if (id) {
+      console.log('Ausgewähltes Konzept ID:', id);
+    }
+  },
+);
+
 function handleNodeClick(concept) {
+  store.setConceptId(concept.id);
   emit('conceptSelected', concept);
 }
 
