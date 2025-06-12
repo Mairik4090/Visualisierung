@@ -1,143 +1,125 @@
 <template>
   <div class="ki-stammbaum-container">
     <h2>KI-Stammbaum Visualisierung</h2>
-    <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
+    <svg
+      ref="svg"
+      class="ki-stammbaum-svg"
+      aria-label="KI-Stammbaum Visualisierung"
+      role="img"
+    >
       <title>KI-Stammbaum Visualisierung</title>
-      <g v-for="(node, index) in graphData.nodes" :key="node.id">
-        <circle :cx="20 + index * 30" cy="20" r="5" />
-        <text :x="20 + index * 30" y="35" text-anchor="middle">{{ node.name || node.id }}</text>
-      </g>
-      <text v-if="pending" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
+      <!-- Fallback-Anzeige während des Ladens -->
+      <text v-if="!nodes || nodes.length === 0" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">
+        Visualisierung lädt...
+      </text>
     </svg>
   </div>
 </template>
 
 <script setup lang="ts">
-// Vue Composition API Imports für Lifecycle und Reaktivität
-import { onMounted, ref, watch, computed } from 'vue';
-// Import des zentralen KiConcept-Typs und Graph-Types aus der Typdefinitionsdatei
-import type { KiConcept, Node, Link } from '@/types/concept';
-// Import des Composables zum Laden der Stammbaum-Daten
-import { useStammbaumData } from '@/composables/useStammbaumData';
+import { onMounted, ref, watch } from 'vue';
+import * as d3 from 'd3';
+import type { Node, Link } from '@/types/concept';
+
+/** Node definition extended with optional name for labels */
+interface GraphNode extends Node {
+  name?: string;
+}
 
 /**
- * Event-Emitter für Kommunikation mit der Parent-Komponente
- * conceptSelected: Wird ausgelöst wenn ein Knoten im Stammbaum angeklickt wird
+ * Eingehende Daten für die Darstellung des KI-Stammbaums.
+ * Beide Properties sind optional, um flexibel mit verschiedenen Datenquellen zu arbeiten.
  */
-const emit = defineEmits<{
-  conceptSelected: [concept: KiConcept];
-}>();
-
 const props = defineProps<{
-  nodes?: Node[];
+  nodes?: GraphNode[];
   links?: Link[];
 }>();
 
-// Referenz auf das SVG-Element für D3.js-Manipulationen
+/**
+ * Event-Emitter für Kommunikation mit der Parent-Komponente.
+ * Wird ausgelöst, wenn ein Benutzer auf einen Knoten klickt.
+ */
+const emit = defineEmits<{
+  conceptSelected: [node: GraphNode];
+}>();
+
+/** 
+ * SVG-Referenz für alle D3-Manipulationen 
+ * Wird verwendet, um das DOM-Element direkt mit D3.js zu steuern
+ */
 const svg = ref<SVGSVGElement | null>(null);
 
-// Laden der Stammbaum-Daten über das Composable
-const { data, pending, error } = useStammbaumData();
-
 /**
- * Computed Property zur Transformation der rohen Daten in Graph-Strukturen
- * Konvertiert die KiConcept-Daten in Nodes und Links für D3.js
+ * Render-Funktion erzeugt die Visualisierung des Stammbaums.
+ * Verwendet D3.js für die dynamische SVG-Generierung und Interaktivität.
  */
-const graphData = computed(() => {
-  if (props.nodes && props.nodes.length) {
-    return { nodes: props.nodes, links: props.links ?? [] };
-  }
-  if (!data.value?.nodes) return { nodes: [], links: [] };
+function render(): void {
+  // Frühzeitiger Ausstieg, falls SVG-Element noch nicht verfügbar
+  if (!svg.value || !props.nodes || props.nodes.length === 0) return;
 
-  const concepts = data.value.nodes as KiConcept[];
+  // D3-Selektion des SVG-Elements
+  const svgSel = d3.select(svg.value);
   
-  // Transformation zu Graph-Knoten
-  const nodes: Node[] = concepts.map(concept => ({
-    id: concept.id,
-    name: concept.name,
-    year: concept.year,
-    description: concept.description,
-    // Weitere D3-spezifische Eigenschaften können hier hinzugefügt werden
-    x: 0,
-    y: 0
-  }));
-  
-  // Transformation zu Graph-Verbindungen basierend auf Dependencies
-  const links: Link[] = [];
-  concepts.forEach(concept => {
-    if (concept.dependencies) {
-      concept.dependencies.forEach(depId => {
-        links.push({
-          source: depId,
-          target: concept.id
-        });
-      });
-    }
-  });
-  
-  return { nodes, links };
-});
+  // Vorherige Inhalte entfernen für saubere Neuzeichnung
+  svgSel.selectAll('*').remove();
 
-/**
- * Watcher für Datenänderungen der Graph-Struktur
- * Wird ausgelöst sobald neue transformierte Daten verfügbar sind und initiiert die D3-Visualisierung
- */
+  // Dynamische Größenbestimmung basierend auf Container
+  const width = svg.value.clientWidth || 600;
+  const height = svg.value.clientHeight || 400;
+
+  // ViewBox für responsive Skalierung setzen
+  svgSel
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  // Zeitskala für horizontale Positionierung der Knoten erstellen
+  const years = props.nodes.map((d) => d.year);
+  const xScale = d3
+    .scaleLinear()
+    .domain(d3.extent(years) as [number, number])
+    .range([40, width - 40]); // Rand von 40px links und rechts
+
+  // Vertikale Mittelposition für alle Knoten
+  const y = height / 2;
+  
+  // Hauptgruppe für alle grafischen Elemente
+  const g = svgSel.append('g');
+
+  // Kreise für jeden Knoten zeichnen
+  g.selectAll('circle')
+    .data(props.nodes, (d: any) => d.id) // Eindeutige Schlüssel für effiziente Updates
+    .join('circle')
+    .attr('cx', (d) => xScale(d.year)) // X-Position basierend auf Jahr
+    .attr('cy', y) // Alle Knoten auf gleicher Höhe
+    .attr('r', 6) // Radius der Kreise
+    .attr('fill', '#1f77b4') // Blaue Füllfarbe
+    .style('cursor', 'pointer') // Zeiger-Cursor für Interaktivität
+    .on('click', (_event, d) => emit('conceptSelected', d as GraphNode)); // Click-Handler
+
+  // Textlabels für jeden Knoten hinzufügen
+  g.selectAll('text')
+    .data(props.nodes, (d: any) => d.id)
+    .join('text')
+    .attr('x', (d) => xScale(d.year)) // X-Position entspricht Kreis
+    .attr('y', y - 12) // Leicht oberhalb des Kreises
+    .attr('text-anchor', 'middle') // Zentrierte Textausrichtung
+    .text((d) => d.name ?? d.id) // Name oder ID als Fallback
+    .style('font-size', '10px') // Kleine Schriftgröße für Übersichtlichkeit
+    .style('fill', '#333'); // Dunkle Textfarbe für Kontrast
+
+  // TODO: Links zwischen Knoten basierend auf props.links hinzufügen
+  // Kann in zukünftigen Versionen implementiert werden
+}
+
+// Komponente nach dem Mounting rendern
+onMounted(render);
+
+// Bei Änderungen der Props neu rendern
 watch(
-  graphData,
-  (newGraphData) => {
-    if (newGraphData.nodes.length > 0 && svg.value) {
-      console.log('Graph aktualisiert:', newGraphData.nodes.length, 'Knoten,', newGraphData.links.length, 'Verbindungen');
-      // renderD3Visualization(newGraphData); // Später implementieren
-    }
-  },
-  { immediate: true }
+  () => [props.nodes, props.links],
+  render,
+  { deep: true }, // Tiefe Überwachung für verschachtelte Objekte
 );
-
-/**
- * Watcher für Fehlerbehandlung
- * Loggt Fehler beim Laden der Daten
- */
-watch(error, (newError) => {
-  if (newError) {
-    console.error('Fehler beim Laden der Stammbaum-Daten:', newError);
-  }
-});
-
-/**
- * Lifecycle Hook - wird nach dem Mounten der Komponente ausgeführt
- * Loggt das SVG-Element für Debugging-Zwecke
- */
-onMounted(() => {
-  console.log('KiStammbaum Komponente mounted. SVG-Element:', svg.value);
-});
-
-/**
- * Event-Handler für Klicks auf Knoten in der Visualisierung
- * Emittiert das conceptSelected-Event mit dem angeklickten Konzept
- * 
- * @param concept - Das angeklickte KI-Konzept
- */
-function handleNodeClick(concept: KiConcept): void {
-  emit('conceptSelected', concept);
-}
-
-/**
- * Hilfsfunktion zur Transformation einzelner Konzepte zu Graph-Knoten
- * Kann für spezielle D3-Anpassungen erweitert werden
- * 
- * @param concept - Das zu transformierende KI-Konzept
- * @returns Graph-Knoten für D3.js
- */
-function conceptToNode(concept: KiConcept): Node {
-  return {
-    id: concept.id,
-    name: concept.name,
-    year: concept.year,
-    description: concept.description,
-    x: 0,
-    y: 0
-  };
-}
 </script>
 
 <style scoped>
@@ -149,6 +131,15 @@ function conceptToNode(concept: KiConcept): Node {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Überschrift der Visualisierung */
+.ki-stammbaum-container h2 {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5rem;
 }
 
 /* SVG-Element für die D3.js-Visualisierung */
@@ -156,5 +147,13 @@ function conceptToNode(concept: KiConcept): Node {
   width: 100%;
   height: 100%;
   border: 1px solid #ccc; /* Visueller Platzhalter während der Entwicklung */
+  border-radius: 4px;
+  background-color: #fafafa; /* Leichter Hintergrund für bessere Sichtbarkeit */
+}
+
+/* Styling für Ladetext */
+.ki-stammbaum-svg text {
+  font-family: 'Arial', sans-serif;
+  fill: #666;
 }
 </style>

@@ -30,3 +30,8 @@ pnpm preview
 ```
 
 Weitere Hinweise zur Bereitstellung finden Sie in der [Nuxt-Dokumentation](https://nuxt.com/docs/getting-started/deployment).
+
+## Navigation & Darstellung
+
+Das Menü im Kopfbereich wird in `layouts/default.vue` über `NuxtLink`-Elemente aufgebaut und verlinkt automatisch auf die Seiten unter `pages/`.
+In der Visualisierung erscheinen die Knotennamen zusammen mit ihrem Jahr; die horizontale Position basiert auf der Jahreszahl.

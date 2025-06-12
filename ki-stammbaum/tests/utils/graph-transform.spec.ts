@@ -11,8 +11,8 @@ describe('transformToGraph', () => {
 
     const graph = transformToGraph(concepts);
     expect(graph.nodes).toEqual([
-      { id: 'a', year: 1950 },
-      { id: 'b', year: 1960 },
+      { id: 'a', name: 'A', year: 1950, description: '' },
+      { id: 'b', name: 'B', year: 1960, description: '' },
     ]);
     expect(graph.links).toEqual([
       { source: 'a', target: 'b' },
