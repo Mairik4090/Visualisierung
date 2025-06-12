@@ -1,37 +1,48 @@
 <template>
-  <div v-if="concept" class="concept-detail-container">
-    <h2>Konzeptdetails</h2>
-    <p><strong>Name:</strong> {{ concept.name }}</p>
-    <p><strong>Jahr:</strong> {{ concept.year }}</p>
-    <p><strong>Beschreibung:</strong> {{ concept.description }}</p>
-    <!-- Weitere Details hier -->
-  </div>
-  <div v-else class="concept-detail-placeholder">
-    <p>Wählen Sie ein Konzept aus, um Details anzuzeigen.</p>
-  </div>
+  <BaseModal :open="!!concept" @close="close">
+    <div v-if="concept" class="concept-detail-container">
+      <h2>Konzeptdetails</h2>
+      <p><strong>Name:</strong> {{ concept.name }}</p>
+      <p><strong>Jahr:</strong> {{ concept.year }}</p>
+      <p><strong>Beschreibung:</strong> {{ concept.description }}</p>
+      <button class="close-button" type="button" @click="close">Schließen</button>
+    </div>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { defineProps } from 'vue';
+// Import des zentralen Concept-Typs aus der Typdefinitionsdatei
+import type { Concept } from '@/types/concept';
+// Import der BaseModal-Komponente für die modale Darstellung
+import BaseModal from './ui/BaseModal.vue';
 
-// Define the structure of a concept, aligning with KiConcept if possible
-interface KiConcept {
-  id: string;
-  name: string;
-  year: number;
-  dependencies?: string[];
-  description: string;
+/**
+ * Props-Definition für die Komponente
+ * concept: Das anzuzeigende KI-Konzept oder null wenn kein Konzept ausgewählt ist
+ */
+const props = defineProps<{
+  concept: Concept | null;
+}>();
+
+/**
+ * Event-Emitter für Kommunikation mit der Parent-Komponente
+ * close: Event wird ausgelöst wenn das Modal geschlossen werden soll
+ */
+const emit = defineEmits<{
+  close: [];
+}>();
+
+/**
+ * Schließt das Modal durch Emission des close-Events
+ * Wird sowohl vom Schließen-Button als auch vom BaseModal selbst aufgerufen
+ */
+function close(): void {
+  emit('close');
 }
-
-const props = defineProps({
-  concept: {
-    type: Object as () => KiConcept | null,
-    default: null,
-  }
-});
 </script>
 
 <style scoped>
+/* Container für den Hauptinhalt des Konzeptdetails-Modals */
 .concept-detail-container {
   border: 1px solid #eee;
   padding: 1rem;
@@ -40,21 +51,14 @@ const props = defineProps({
   border-radius: 8px;
 }
 
+/* Styling für die Überschrift - Abstand oben entfernen */
 .concept-detail-container h2 {
   margin-top: 0;
   color: #333;
 }
 
+/* Spacing zwischen den Informationsparagraphen */
 .concept-detail-container p {
   margin-bottom: 0.5rem;
-}
-
-.concept-detail-placeholder {
-  padding: 1rem;
-  margin-top: 1rem;
-  text-align: center;
-  color: #888;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
 }
 </style>

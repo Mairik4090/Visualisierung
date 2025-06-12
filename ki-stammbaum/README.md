@@ -1,75 +1,43 @@
-# Nuxt Minimal Starter
+# KI-Stammbaum
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Diese Nuxt-3-Anwendung visualisiert die Entwicklung der künstlichen Intelligenz. 
+Die Daten liegen als JSON im Ordner `public/data` und werden offline geladen. 
+D3.js erzeugt daraus einen interaktiven Graphen.
 
 ## Setup
 
-Make sure to install dependencies:
+Abhängigkeiten werden mit pnpm installiert:
 
 ```bash
-# npm
-npm install
-
-# pnpm
 pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
+### Offline-Nutzung
 
-Start the development server on `http://localhost:3000`:
+Stellen Sie sicher, dass alle Abhängigkeiten und die Datei `public/data/ki-stammbaum.json`
+lokal verfügbar sind. Die Anwendung lädt die Daten direkt aus dieser Datei und benötigt
+keine Internetverbindung.
+
+## Entwicklungsserver
+
+Starten Sie den lokalen Server unter `http://localhost:3000`:
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
 pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+## Build
 
-Build the application for production:
+Ein Produktionsbuild lässt sich wie folgt erzeugen und testen:
 
 ```bash
-# npm
-npm run build
-
-# pnpm
 pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
 pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+Weitere Hinweise zur Bereitstellung finden Sie in der [Nuxt-Dokumentation](https://nuxt.com/docs/getting-started/deployment).
+
+## Navigation & Darstellung
+
+Das Menü im Kopfbereich wird in `layouts/default.vue` über `NuxtLink`-Elemente aufgebaut und verlinkt automatisch auf die Seiten unter `pages/`.
+In der Visualisierung erscheinen die Knotennamen zusammen mit ihrem Jahr; die horizontale Position basiert auf der Jahreszahl.

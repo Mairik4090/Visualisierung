@@ -1,0 +1,19 @@
+# KiStammbaum.vue
+
+Diese Komponente bildet die zentrale Visualisierung des KI-Stammbaums. Die bereits
+transformierten Graph-Daten werden per Props übergeben und dienen als Grundlage für die
+D3-Visualisierung. Die Kreise werden entlang einer Zeitachse positioniert und bei
+Datenänderungen oder nach dem Mount automatisch neu gezeichnet.
+
+## Props
+
+- `nodes` – Liste der Knotenobjekte (`id`, `name`, `year`). Die horizontale Position eines Knotens richtet sich nach dem Jahr.
+- `links` – Liste der Verbindungen zwischen den Knoten (`source`, `target`).
+
+## Emits
+
+- `conceptSelected(concept)` – wird ausgelöst, wenn ein Knoten angeklickt wurde.
+
+## D3‑Zeitleistenverhalten
+
+Die Knoten werden entlang einer Zeitachse angeordnet. D3 berechnet aus dem `year` jedes Knotens die x‑Position, während eine Force‑Simulation für die y‑Verteilung sorgt.

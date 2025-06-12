@@ -1,3 +1,4 @@
+
 export interface Concept {
   id: string;
   name: string;
@@ -8,7 +9,11 @@ export interface Concept {
 
 export interface Node {
   id: string;
+  /** Display name of the concept */
+  name: string;
   year: number;
+  /** Optional description shown in tooltips */
+  description?: string;
 }
 
 export interface Link {
