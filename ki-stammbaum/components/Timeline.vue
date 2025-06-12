@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, ref, nextTick, defineExpose } from 'vue';
+import { onMounted, onBeforeUnmount, watch, ref, nextTick, defineExpose } from 'vue';
 import * as d3 from 'd3';
 import type { Node } from '@/types/concept';
 
@@ -27,6 +27,7 @@ const emit = defineEmits<{
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
 /** Aktueller Zoomfaktor der Timeline */
 const zoomScale = ref(1);
@@ -163,8 +164,13 @@ function applyZoom(scale: number) {
 }
 
 defineExpose({ applyZoom, zoomScale });
+onMounted(() => {
+  render();
+  resizeObserver = new ResizeObserver(() => render());
+  if (svg.value) resizeObserver.observe(svg.value);
+});
 
-onMounted(render);
+onBeforeUnmount(() => resizeObserver?.disconnect());
 watch(
   () => props.nodes,
   async () => {

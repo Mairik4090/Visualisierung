@@ -1,5 +1,5 @@
 <template>
-  <div class="ki-stammbaum-container">
+  <div class="ki-stammbaum-container" ref="container">
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg
       ref="svg"
@@ -54,6 +54,8 @@ const emit = defineEmits<{
  * Wird verwendet, um das DOM-Element direkt mit D3.js zu steuern
  */
 const svg = ref<SVGSVGElement | null>(null);
+const container = ref<HTMLElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
 /** Aktuelle D3-Simulation zur späteren Bereinigung */
 let simulation: d3.Simulation<GraphNode, undefined> | null = null;
@@ -196,10 +198,17 @@ function render(): void {
 
 // Komponente nach dem Mounting rendern
 
-onMounted(render);
+onMounted(() => {
+  render();
+  resizeObserver = new ResizeObserver(() => render());
+  if (container.value) resizeObserver.observe(container.value);
+});
 
-// Simulation beim Unmount stoppen, um Speicherlecks zu vermeiden
-onBeforeUnmount(() => simulation?.stop());
+// Simulation und ResizeObserver beim Unmount stoppen, um Speicherlecks zu vermeiden
+onBeforeUnmount(() => {
+  simulation?.stop();
+  resizeObserver?.disconnect();
+});
 
 // Bei Änderungen der Props neu rendern
 watch(
