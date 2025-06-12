@@ -14,7 +14,6 @@
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
     />
 
-    <!-- Hover Preview Tooltip for Timeline -->
     <div
       v-if="hoveredNodeInTimeline && hoverPreviewPosition"
       class="timeline-hover-preview"
@@ -63,8 +62,8 @@
   /** Momentan ausgewähltes Konzept */
   const selected = ref<Node | null>(null); // Added type for selected
 
-  /** Aktueller sichtbarer Zeitraum aus der Timeline */
-  const currentYearRange = ref<[number, number]>([1950, 2025]);
+  /** Aktueller sichtbarer Zeitraum aus der Timeline (als Tuple getypt) */
+  const currentYearRange = ref([1950, 2025] as [number, number]);
 
   /** For Hover Preview in Timeline */
   const hoveredNodeInTimeline = ref<Node | null>(null);
@@ -102,7 +101,7 @@
   function onYearSelected(year: number) {
     // This function might be deprecated by direct node clicking,
     // but keep for now if still wired up to old timeline bar clicks.
-    currentYearRange.value = [year - 1, year + 1];
+    currentYearRange.value = [year - 1, year + 1] as [number, number];
   }
 
   /** Handler for node click events from Timeline.vue */
@@ -133,7 +132,7 @@
   function handleCenterOnYear(year: number) {
     const newMin = Math.round(year - yearFocusWindowSpan / 2);
     const newMax = Math.round(year + yearFocusWindowSpan / 2);
-    currentYearRange.value = [newMin, newMax];
+    currentYearRange.value = [newMin, newMax] as [number, number];
   }
 
   /** Daten für die Timeline (alle Knoten) */
@@ -156,7 +155,7 @@
         const years = newGraphData.nodes.map((n: any) => n.year);
         const minYear = Math.min(...years);
         const maxYear = Math.max(...years);
-        currentYearRange.value = [minYear, maxYear];
+        currentYearRange.value = [minYear, maxYear] as [number, number];
       }
     },
     { immediate: true },
@@ -167,8 +166,8 @@
   .stammbaum-page {
     padding: 1rem;
     /* position: relative; Consider if preview is 'absolute' instead of 'fixed'
-       and needs to be relative to this page container.
-       For 'fixed', this is not strictly necessary but doesn't harm. */
+      and needs to be relative to this page container.
+      For 'fixed', this is not strictly necessary but doesn't harm. */
   }
 
   .timeline-hover-preview {
