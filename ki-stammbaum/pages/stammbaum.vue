@@ -55,7 +55,6 @@ function selectConcept(concept: any) {
 
 // Platzhalter für spätere Filter-Logik
 function onFilters(filters: any) {
-  console.log('angewandte Filter', filters);
 }
 
 // Empfang des neuen Jahresbereichs von der Timeline
