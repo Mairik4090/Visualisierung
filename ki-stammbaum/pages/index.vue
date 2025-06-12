@@ -10,7 +10,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-const { data: treeData, pending, error } = await useFetch('/data/ki-stammbaum.json');
+// Use runtime config so the fetch path respects the app base URL.
+const config = useRuntimeConfig();
+const { data: treeData, pending, error } = await useFetch('data/ki-stammbaum.json', {
+  baseURL: config.app.baseURL,
+});
 </script>
 
 <style scoped>
