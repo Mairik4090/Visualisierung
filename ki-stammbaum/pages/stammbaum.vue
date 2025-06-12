@@ -29,6 +29,7 @@
 definePageMeta({ layout: 'default' });
 
 import { computed, ref } from 'vue';
+import * as d3 from 'd3';
 import KiStammbaum from '@/components/KiStammbaum.vue';
 import FilterControls from '@/components/FilterControls.vue';
 import ConceptDetail from '@/components/ConceptDetail.vue';
@@ -43,11 +44,12 @@ const selected = ref(null);
 // Speichert den aktuell sichtbaren Zeitbereich aus der Timeline
 const timelineRange = ref<[number, number] | null>(null);
 
-const legendCategories = [
-  { name: 'Algorithmus',   color: '#1f77b4' },
-  { name: 'Konzept',       color: '#2ca02c' },
-  { name: 'Technologie',   color: '#ff7f0e' },
-];
+const legendCategories = computed(() => {
+  if (!data.value) return [];
+  const cats = Array.from(new Set(data.value.nodes.map((n: any) => n.category)));
+  const color = d3.scaleOrdinal<string>().domain(cats).range(d3.schemeCategory10);
+  return cats.map((c) => ({ name: c, color: color(c) }));
+});
 
 // Auswahl eines Konzepts im Stammbaum
 function selectConcept(concept: any) {

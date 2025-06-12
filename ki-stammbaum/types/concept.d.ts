@@ -4,6 +4,8 @@ export interface Concept {
   name: string;
   year: number;
   description: string;
+  /** Classification used for grouping and coloring */
+  category: string;
   dependencies: string[];
 }
 
@@ -14,6 +16,8 @@ export interface Node {
   year: number;
   /** Optional description shown in tooltips */
   description?: string;
+  /** Optional category of the concept */
+  category?: string;
 }
 
 export interface Link {

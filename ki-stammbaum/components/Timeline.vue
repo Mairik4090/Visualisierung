@@ -38,8 +38,11 @@ let y: d3.ScaleLinear<number, number>;
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown>;
 let barsGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let axisGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-let data: { year: number; count: number }[] = [];
+let data: any[] = [];
 let currentBinSize = 1;
+let categories: string[] = [];
+let color: d3.ScaleOrdinal<string, string>;
+let stackData: d3.Series<any, string>[];
 
 function binSizeForScale(scale: number): number {
   if (scale < 1.5) return 10; // Jahrzehnt
@@ -47,18 +50,25 @@ function binSizeForScale(scale: number): number {
   return 1;                   // Einzelnes Jahr
 }
 
-function binnedData(binSize: number): { year: number; count: number }[] {
-  const counts = d3.rollups(
+function binnedData(binSize: number): any[] {
+  const categories = Array.from(new Set(props.nodes.map(n => n.category)));
+  const rolled = d3.rollups(
     props.nodes,
     v => v.length,
-    d => Math.floor(d.year / binSize) * binSize
+    d => Math.floor(d.year / binSize) * binSize,
+    d => d.category
   );
-  const countMap = new Map(counts);
+  const map = new Map<number, Map<string, number>>();
+  rolled.forEach(([year, catCounts]) => {
+    map.set(year, new Map(catCounts));
+  });
   const start = Math.floor(minYear / binSize) * binSize;
   const end = Math.ceil((maxYear + 1) / binSize) * binSize - 1;
-  const result: { year: number; count: number }[] = [];
+  const result: any[] = [];
   for (let yv = start; yv <= end; yv += binSize) {
-    result.push({ year: yv, count: countMap.get(yv) ?? 0 });
+    const entry: Record<string, number> = { year: yv };
+    categories.forEach(c => { entry[c] = map.get(yv)?.get(c) ?? 0; });
+    result.push(entry);
   }
   return result;
 }
@@ -70,19 +80,18 @@ function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
   const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear));
 
   const rects = barsGroup
-    .selectAll<SVGRectElement, { year: number; count: number }>('rect')
-    .data(data, d => d.year as any);
-
-  // Enter + Update + Exit
-  rects.join('rect')
-    .attr('fill', '#69b3a2')
-    .on('click', (_, d) => emit('yearSelected', d.year));
-
-  rects
-    .attr('x', d => zx(d.year + currentBinSize / 2) - barWidth / 2)
+    .selectAll('g')
+    .data(stackData)
+    .join('g')
+    .attr('fill', (d: any) => color(d.key))
+    .selectAll('rect')
+    .data(d => d)
+    .join('rect')
+    .attr('x', d => zx(d.data.year + currentBinSize / 2) - barWidth / 2)
     .attr('width', barWidth)
-    .attr('y', d => y(d.count))
-    .attr('height', d => y(0) - y(d.count));
+    .attr('y', d => y(d[1]))
+    .attr('height', d => y(d[0]) - y(d[1]))
+    .on('click', (_, d) => emit('yearSelected', d.data.year));
 
   axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
 
@@ -102,15 +111,21 @@ function render(): void {
   const years = props.nodes.map(d => d.year);
   [minYear, maxYear] = d3.extent(years) as [number, number];
 
+  categories = Array.from(new Set(props.nodes.map(d => d.category)));
+  color = d3.scaleOrdinal<string>()
+    .domain(categories)
+    .range(d3.schemeCategory10);
+
   x = d3.scaleLinear()
     .domain([minYear, maxYear])
     .range([margin.left, width - margin.right]);
 
   currentBinSize = binSizeForScale(zoomScale.value);
   data = binnedData(currentBinSize);
+  stackData = d3.stack().keys(categories)(data);
 
   y = d3.scaleLinear()
-    .domain([0, d3.max(data, d => d.count) ?? 1])
+    .domain([0, d3.max(stackData, series => d3.max(series, d => d[1])) ?? 1])
     .range([height - margin.bottom, margin.top]);
 
   barsGroup = svgSel.append('g').attr('class', 'bars');
@@ -131,8 +146,9 @@ function render(): void {
       if (newSize !== currentBinSize) {
         currentBinSize = newSize;
         data = binnedData(currentBinSize);
-        y.domain([0, d3.max(data, d => d.count) ?? 1]);
-        barsGroup.selectAll('rect').remove();
+        stackData = d3.stack().keys(categories)(data);
+        y.domain([0, d3.max(stackData, series => d3.max(series, d => d[1])) ?? 1]);
+        barsGroup.selectAll('*').remove();
       }
       draw(ev.transform);
     });

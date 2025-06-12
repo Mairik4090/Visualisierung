@@ -90,9 +90,34 @@ function render(): void {
     .scaleLinear()
     .domain(d3.extent(years) as [number, number])
     .range([40, width - 40]); // Rand von 40px links und rechts
+  // Kategorien ermitteln und Skalen vorbereiten
+  const categories = Array.from(new Set(props.nodes.map((d) => d.category)));
 
-  // Farbskala
-  const color = d3.scaleOrdinal(d3.schemeCategory10);
+  const yScale = d3
+    .scalePoint<string>()
+    .domain(categories)
+    .range([40, height - 40]);
+
+  // Farbskala nach Kategorie
+  const color = d3.scaleOrdinal<string>()
+    .domain(categories)
+    .range(d3.schemeCategory10);
+
+  // Positionen der Knoten innerhalb eines Jahres/Kategorie-Clusters vorbereiten
+  const groupCounts = new Map<string, number>();
+  props.nodes.forEach((n) => {
+    const key = `${n.year}-${n.category}`;
+    groupCounts.set(key, (groupCounts.get(key) ?? 0) + 1);
+  });
+  const groupIndex = new Map<string, number>();
+  props.nodes.forEach((n) => {
+    const key = `${n.year}-${n.category}`;
+    const i = groupIndex.get(key) ?? 0;
+    groupIndex.set(key, i + 1);
+    (n as any)._offset = i - (groupCounts.get(key)! - 1) / 2;
+    (n as any)._y = yScale(n.category ?? '');
+    (n as any)._x = xScale(n.year) + ((n as any)._offset ?? 0) * 12;
+  });
 
   // Hauptgruppe für alle grafischen Elemente
   const g = svgSel.append('g');
@@ -116,7 +141,7 @@ function render(): void {
     .data(props.nodes, (d: any) => d.id)
     .join('circle')
     .attr('r', 6)
-    .attr('fill', (d: any, i) => color(String(i)))
+    .attr('fill', (d: any) => color(d.category ?? ''))
     .style('cursor', 'pointer')
     .on('click', (_event, d) => emit('conceptSelected', d as GraphNode));
 
@@ -148,21 +173,21 @@ function render(): void {
         d3.forceLink(props.links ?? []).id((d: any) => d.id).distance(60),
       )
       .force('charge', d3.forceManyBody().strength(-120))
-      .force('x', d3.forceX((d: any) => xScale(d.year)))
-      .force('y', d3.forceY(height / 2).strength(0.05))
+      .force('x', d3.forceX((d: any) => (d as any)._x))
+      .force('y', d3.forceY((d: any) => (d as any)._y).strength(0.1))
       .on('tick', ticked);
   } else {
     node
-      .attr('cx', (d: any) => xScale(d.year))
-      .attr('cy', height / 2);
+      .attr('cx', (d: any) => (d as any)._x)
+      .attr('cy', (d: any) => (d as any)._y);
     labels
-      .attr('x', (d: any) => xScale(d.year))
-      .attr('y', height / 2 - 12);
+      .attr('x', (d: any) => (d as any)._x)
+      .attr('y', (d: any) => (d as any)._y - 12);
     link
-      .attr('x1', (d: any) => xScale((d.source as GraphNode).year))
-      .attr('y1', height / 2)
-      .attr('x2', (d: any) => xScale((d.target as GraphNode).year))
-      .attr('y2', height / 2);
+      .attr('x1', (d: any) => ((d.source as any)._x))
+      .attr('y1', (d: any) => ((d.source as any)._y))
+      .attr('x2', (d: any) => ((d.target as any)._x))
+      .attr('y2', (d: any) => ((d.target as any)._y));
   }
 
   function ticked() {

@@ -20,6 +20,7 @@ export function transformToGraph(concepts: Concept[]): Graph {
     name: c.name,
     year: +c.year,
     description: c.description,
+    category: c.category,
   }));
   // 2 Links erstellen – Abhängigkeiten bilden gerichtete Kanten
   const links: Link[] = concepts.flatMap((c) =>
