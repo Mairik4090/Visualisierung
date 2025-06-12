@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, ref } from 'vue';
+import { onMounted, watch, ref, nextTick, defineExpose } from 'vue';
 import * as d3 from 'd3';
 import type { Node } from '@/types/concept';
 
@@ -17,6 +17,58 @@ const emit = defineEmits<{
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
+/** Aktueller Zoomfaktor der Timeline */
+const zoomScale = ref(1);
+
+let minYear = 0;
+let maxYear = 0;
+let x: d3.ScaleLinear<number, number>;
+let y: d3.ScaleLinear<number, number>;
+let zoom: d3.ZoomBehavior<SVGSVGElement, unknown>;
+let barsGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+let axisGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+let data: { year: number; count: number }[] = [];
+let currentBinSize = 1;
+
+function binSizeForScale(scale: number): number {
+  if (scale < 1.5) return 10; // decade
+  if (scale < 3) return 5; // five-year
+  return 1; // yearly
+}
+
+function binnedData(binSize: number): { year: number; count: number }[] {
+  const counts = d3.rollups(props.nodes, (v) => v.length, (d) => Math.floor(d.year / binSize) * binSize);
+  const countMap = new Map(counts);
+  const start = Math.floor(minYear / binSize) * binSize;
+  const end = Math.ceil((maxYear + 1) / binSize) * binSize - 1;
+  const result = [] as { year: number; count: number }[];
+  for (let yv = start; yv <= end; yv += binSize) {
+    result.push({ year: yv, count: countMap.get(yv) ?? 0 });
+  }
+  return result;
+}
+
+function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
+  if (!svg.value) return;
+
+  const zx = transform.rescaleX(x);
+  const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear));
+
+  const rects = barsGroup.selectAll('rect').data(data, (d: any) => d.year);
+  rects
+    .join('rect')
+    .attr('fill', '#69b3a2');
+
+  rects
+    .attr('x', (d) => zx(d.year + currentBinSize / 2) - barWidth / 2)
+    .attr('width', barWidth)
+    .attr('y', (d) => y(d.count))
+    .attr('height', (d) => y(0) - y(d.count));
+
+  axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
+
+  emit('rangeChanged', zx.domain() as [number, number]);
+}
 
 function render(): void {
   if (!svg.value || !props.nodes || props.nodes.length === 0) return;
@@ -29,72 +81,61 @@ function render(): void {
   const margin = { top: 10, right: 20, bottom: 20, left: 20 };
 
   const years = props.nodes.map((d) => d.year);
-  const [minYear, maxYear] = d3.extent(years) as [number, number];
-  const counts = d3.rollups(props.nodes, (v) => v.length, (d) => d.year);
-  const countMap = new Map(counts);
+  [minYear, maxYear] = d3.extent(years) as [number, number];
 
-  const data = d3.range(minYear, maxYear + 1).map((y) => ({
-    year: y,
-    count: countMap.get(y) ?? 0,
-  }));
-
-  const x = d3.scaleLinear()
+  x = d3.scaleLinear()
     .domain([minYear, maxYear])
     .range([margin.left, width - margin.right]);
 
-  const y = d3.scaleLinear()
+  currentBinSize = binSizeForScale(zoomScale.value);
+  data = binnedData(currentBinSize);
+  y = d3.scaleLinear()
     .domain([0, d3.max(data, (d) => d.count) ?? 1])
     .range([height - margin.bottom, margin.top]);
 
-  const g = svgSel.append('g');
-  const barWidth = Math.max(1, (width - margin.left - margin.right) / data.length);
-
-  const bars = g.append('g')
-    .attr('class', 'bars')
-    .selectAll('rect')
-    .data(data)
-    .join('rect')
-      .attr('x', (d) => x(d.year) - barWidth / 2)
-      .attr('y', (d) => y(d.count))
-      .attr('width', barWidth)
-      .attr('height', (d) => height - margin.bottom - y(d.count))
-      .attr('fill', '#69b3a2');
-
-  const axis = g.append('g')
+  barsGroup = svgSel.append('g').attr('class', 'bars');
+  axisGroup = svgSel.append('g')
     .attr('class', 'x-axis')
-    .attr('transform', `translate(0,${height - margin.bottom})`)
-    .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('d')));
+    .attr('transform', `translate(0,${height - margin.bottom})`);
 
-  // Initialer Emit des vollen Bereichs
-  emit('rangeChanged', [minYear, maxYear]);
-
-  // Zoom- und Pan-Interaktion
-  const zoom = d3.zoom<SVGSVGElement, unknown>()
+  zoom = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([1, 8])
     .translateExtent([
       [margin.left, 0],
       [width - margin.right, height],
     ])
     .on('zoom', (ev) => {
-      const zx = ev.transform.rescaleX(x);
-
-      bars
-        .attr('x', (d) => zx(d.year) - barWidth / 2)
-        .attr('width', Math.max(1, zx(data[1].year) - zx(data[0].year)));
-
-      axis.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
-
-      // Emit bei jedem Zoom-Event
-      emit('rangeChanged', zx.domain() as [number, number]);
+      zoomScale.value = ev.transform.k;
+      const newSize = binSizeForScale(zoomScale.value);
+      if (newSize !== currentBinSize) {
+        currentBinSize = newSize;
+        data = binnedData(currentBinSize);
+        y.domain([0, d3.max(data, (d) => d.count) ?? 1]);
+        barsGroup.selectAll('rect').remove();
+      }
+      draw(ev.transform);
     });
 
   svgSel.call(zoom as any);
+
+  draw();
 }
+
+function applyZoom(scale: number) {
+  if (svg.value) {
+    d3.select(svg.value).call(zoom.scaleTo as any, scale);
+  }
+}
+
+defineExpose({ applyZoom, zoomScale });
 
 onMounted(render);
 watch(
   () => props.nodes,
-  () => render(),
+  async () => {
+    render();
+    await nextTick();
+  },
   { deep: true }
 );
 </script>
