@@ -3,6 +3,8 @@
  * Stellt reaktive Zustände für mehrere Komponenten zur Verfügung
  */
 import { shallowRef, type Ref } from 'vue';
+// Nuxt helper to prepend the configured base path when fetching assets
+import { withBase } from '#imports';
 
 /**
  * Interface für die Struktur der Stammbaum-Daten
@@ -37,12 +39,14 @@ async function loadData(): Promise<void> {
 
   try {
     // Daten von der API laden und in den Cache speichern
-    const result = await $fetch<StammbaumData>('/data/ki-stammbaum.json');
+    const result = await $fetch<StammbaumData>(
+      withBase('/data/ki-stammbaum.json'),
+    );
     dataCache.value = result;
   } catch (err) {
     try {
       // Fallback auf statischen Import, falls kein Netzwerkzugriff möglich ist
-      const localModule = await import('@/public/data/ki-stammbaum.json');
+      const localModule = await import('~/public/data/ki-stammbaum.json');
       dataCache.value = (localModule.default || localModule) as StammbaumData;
     } catch {
       // Fehler erfassen und in typisierter Form speichern
