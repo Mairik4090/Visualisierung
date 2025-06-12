@@ -1,4 +1,6 @@
-export interface KiConcept {
+
+export interface Concept {
+ main
   id: string;
   name: string;
   year: number;

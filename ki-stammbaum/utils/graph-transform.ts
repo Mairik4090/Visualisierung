@@ -1,14 +1,25 @@
-import type { KiConcept, Node, Link, Graph } from '@/types/concept';
 
 /**
- * Convert an array of KiConcept objects into a graph structure usable by D3.
- * @param concepts Array of concepts loaded from the JSON data.
- * @returns Graph object containing nodes and links.
+ * Utility functions for transforming the KI-Stammbaum dataset into
+ * a D3-compatible format.
+ * @module graph-transform
+ * @author KI-Stammbaum
  */
-export function transformToGraph(concepts: KiConcept[]): Graph {
-  const nodes: Node[] = concepts.map((c) => ({ id: c.id, year: c.year }));
+
+import type { Concept, Graph, Node, Link } from '../types/concept';
+
+/**
+ * Converts a list of concepts into nodes and links for D3.
+ * @param concepts - Preprocessed concepts from the JSON file.
+ * @returns Object containing arrays of nodes and links.
+ */
+export function transformToGraph(concepts: Concept[]): Graph {
+  // 1 Nodes erstellen – jedes Konzept wird zum Knoten
+  const nodes: Node[] = concepts.map((c) => ({ id: c.id, year: +c.year }));
+  // 2 Links erstellen – Abhängigkeiten bilden gerichtete Kanten
   const links: Link[] = concepts.flatMap((c) =>
-    c.dependencies.map((dep) => ({ source: dep, target: c.id })),
+    (c.dependencies ?? []).map((dep) => ({ source: dep, target: c.id })),
+ main
   );
   return { nodes, links };
 }
