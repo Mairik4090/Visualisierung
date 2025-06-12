@@ -33,4 +33,23 @@ describe('Timeline', () => {
     const [range] = events![0];
     expect(range).toEqual([2000, 2002]);
   });
+
+  it('changes number of bars when zoomed', async () => {
+    const nodes = Array.from({ length: 20 }, (_, i) => ({
+      id: `n${i}`,
+      name: `N${i}`,
+      year: 1990 + i,
+    }));
+
+    const wrapper = mount(Timeline, { props: { nodes } });
+
+    const initialBars = wrapper.findAll('rect').length;
+    expect(initialBars).toBe(2);
+
+    (wrapper.vm as any).applyZoom(4);
+    await wrapper.vm.$nextTick();
+
+    const zoomedBars = wrapper.findAll('rect').length;
+    expect(zoomedBars).toBeGreaterThan(initialBars);
+  });
 });
