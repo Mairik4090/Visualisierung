@@ -17,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import * as d3 from 'd3';
 import type { Node, Link } from '@/types/concept';
 
@@ -49,6 +49,9 @@ const emit = defineEmits<{
  */
 const svg = ref<SVGSVGElement | null>(null);
 
+/** Aktuelle D3-Simulation zur späteren Bereinigung */
+let simulation: d3.Simulation<GraphNode, undefined> | null = null;
+
 /**
  * Render-Funktion erzeugt die Visualisierung des Stammbaums.
  * Verwendet D3.js für die dynamische SVG-Generierung und Interaktivität.
@@ -57,9 +60,12 @@ function render(): void {
   // Frühzeitiger Ausstieg, falls SVG-Element noch nicht verfügbar
   if (!svg.value || !props.nodes || props.nodes.length === 0) return;
 
+  // Vorherige Simulation beenden
+  simulation?.stop();
+
   // D3-Selektion des SVG-Elements
   const svgSel = d3.select(svg.value);
-  
+
   // Vorherige Inhalte entfernen für saubere Neuzeichnung
   svgSel.selectAll('*').remove();
 
@@ -79,40 +85,100 @@ function render(): void {
     .domain(d3.extent(years) as [number, number])
     .range([40, width - 40]); // Rand von 40px links und rechts
 
-  // Vertikale Mittelposition für alle Knoten
-  const y = height / 2;
-  
+  // Farbskala
+  const color = d3.scaleOrdinal(d3.schemeCategory10);
+
   // Hauptgruppe für alle grafischen Elemente
   const g = svgSel.append('g');
 
-  // Kreise für jeden Knoten zeichnen
-  g.selectAll('circle')
-    .data(props.nodes, (d: any) => d.id) // Eindeutige Schlüssel für effiziente Updates
+  // Linien für die Links erstellen
+  const link = g
+    .append('g')
+    .attr('stroke', '#999')
+    .attr('stroke-opacity', 0.6)
+    .selectAll('line')
+    .data(props.links ?? [])
+    .join('line')
+    .attr('stroke-width', 1.5);
+
+  // Gruppe für die Knoten
+  const node = g
+    .append('g')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .selectAll('circle')
+    .data(props.nodes, (d: any) => d.id)
     .join('circle')
-    .attr('cx', (d) => xScale(d.year)) // X-Position basierend auf Jahr
-    .attr('cy', y) // Alle Knoten auf gleicher Höhe
-    .attr('r', 6) // Radius der Kreise
-    .attr('fill', '#1f77b4') // Blaue Füllfarbe
-    .style('cursor', 'pointer') // Zeiger-Cursor für Interaktivität
-    .on('click', (_event, d) => emit('conceptSelected', d as GraphNode)); // Click-Handler
+    .attr('r', 6)
+    .attr('fill', (d: any, i) => color(String(i)))
+    .style('cursor', 'pointer')
+    .on('click', (_event, d) => emit('conceptSelected', d as GraphNode));
 
   // Textlabels für jeden Knoten hinzufügen
-  g.selectAll('text')
+  const labels = g
+    .append('g')
+    .selectAll('text')
     .data(props.nodes, (d: any) => d.id)
     .join('text')
-    .attr('x', (d) => xScale(d.year)) // X-Position entspricht Kreis
-    .attr('y', y - 12) // Leicht oberhalb des Kreises
-    .attr('text-anchor', 'middle') // Zentrierte Textausrichtung
-    .text((d) => d.name ?? d.id) // Name oder ID als Fallback
-    .style('font-size', '10px') // Kleine Schriftgröße für Übersichtlichkeit
-    .style('fill', '#333'); // Dunkle Textfarbe für Kontrast
+    .attr('text-anchor', 'middle')
+    .style('font-size', '10px')
+    .style('fill', '#333')
+    .text((d) => d.name ?? d.id);
 
-  // TODO: Links zwischen Knoten basierend auf props.links hinzufügen
-  // Kann in zukünftigen Versionen implementiert werden
+  node.call(
+    d3
+      .drag<SVGCircleElement, GraphNode>()
+      .on('start', dragStarted)
+      .on('drag', dragged)
+      .on('end', dragEnded),
+  );
+
+  // Simulation mit Kräften initialisieren
+  simulation = d3
+    .forceSimulation(props.nodes)
+    .force(
+      'link',
+      d3.forceLink(props.links ?? []).id((d: any) => d.id).distance(60),
+    )
+    .force('charge', d3.forceManyBody().strength(-120))
+    .force('x', d3.forceX((d: any) => xScale(d.year)))
+    .force('y', d3.forceY(height / 2).strength(0.05))
+    .on('tick', ticked);
+
+  function ticked() {
+    link
+      .attr('x1', (d: any) => (d.source as GraphNode).x)
+      .attr('y1', (d: any) => (d.source as GraphNode).y)
+      .attr('x2', (d: any) => (d.target as GraphNode).x)
+      .attr('y2', (d: any) => (d.target as GraphNode).y);
+
+    node.attr('cx', (d: any) => d.x).attr('cy', (d: any) => d.y);
+    labels.attr('x', (d: any) => d.x).attr('y', (d: any) => (d.y ?? 0) - 12);
+  }
+
+  function dragStarted(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    if (!event.active) simulation?.alphaTarget(0.3).restart();
+    event.subject.fx = event.subject.x;
+    event.subject.fy = event.subject.y;
+  }
+
+  function dragged(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    event.subject.fx = event.x;
+    event.subject.fy = event.y;
+  }
+
+  function dragEnded(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    if (!event.active) simulation?.alphaTarget(0);
+    event.subject.fx = null;
+    event.subject.fy = null;
+  }
 }
 
 // Komponente nach dem Mounting rendern
 onMounted(render);
+
+// Simulation beim Unmount stoppen, um Speicherlecks zu vermeiden
+onBeforeUnmount(() => simulation?.stop());
 
 // Bei Änderungen der Props neu rendern
 watch(
@@ -157,3 +223,4 @@ watch(
   fill: #666;
 }
 </style>
+
