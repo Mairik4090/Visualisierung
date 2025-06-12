@@ -14,6 +14,7 @@ import type { Node } from '@/types/concept';
 const props = defineProps<{ nodes: Node[] }>();
 const emit = defineEmits<{
   (e: 'rangeChanged', range: [number, number]): void;
+  (e: 'yearSelected', year: number): void;
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
@@ -58,7 +59,8 @@ function render(): void {
       .attr('y', (d) => y(d.count))
       .attr('width', barWidth)
       .attr('height', (d) => height - margin.bottom - y(d.count))
-      .attr('fill', '#69b3a2');
+      .attr('fill', '#69b3a2')
+      .on('click', (_, d) => emit('yearSelected', d.year));
 
   const axis = g.append('g')
     .attr('class', 'x-axis')

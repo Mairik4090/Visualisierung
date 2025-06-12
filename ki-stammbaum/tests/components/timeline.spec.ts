@@ -33,4 +33,19 @@ describe('Timeline', () => {
     const [range] = events![0];
     expect(range).toEqual([2000, 2002]);
   });
+
+  it('emits yearSelected when a bar is clicked', async () => {
+    const wrapper = mount(Timeline, {
+      props: {
+        nodes: [
+          { id: 'a', name: 'A', year: 2000 },
+        ],
+      },
+    });
+
+    await wrapper.find('rect').trigger('click');
+    const events = wrapper.emitted<'yearSelected'>('yearSelected');
+    expect(events).toBeTruthy();
+    expect(events![0]).toEqual([2000]);
+  });
 });
