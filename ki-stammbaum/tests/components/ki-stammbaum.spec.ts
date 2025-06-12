@@ -28,7 +28,9 @@ describe('KiStammbaum', () => {
 
     const labels = wrapper.findAll('text');
     // first two text elements are labels since last one may be loading text
-    const labelTexts = labels.map((t) => t.text()).filter((t) => t !== 'Visualisierung lädt...');
+    const labelTexts = labels
+      .map((t) => t.text())
+      .filter((t) => t !== 'Visualisierung lädt...');
     expect(labelTexts).toContain('Node A');
     expect(labelTexts).toContain('Node B');
   });

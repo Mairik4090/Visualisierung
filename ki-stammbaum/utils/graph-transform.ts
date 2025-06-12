@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for transforming the KI-Stammbaum dataset into
  * a D3-compatible format.
