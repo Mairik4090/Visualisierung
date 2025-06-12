@@ -525,7 +525,9 @@
 
 <style scoped>
   .ki-stammbaum-container {
-    width: 100%;
+    width: auto;
+    margin-left: 20px;
+    margin-right: 20px;
     height: 80vh;
     display: flex;
     flex-direction: column;
