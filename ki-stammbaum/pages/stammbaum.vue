@@ -12,6 +12,7 @@
       @year-selected="onYearSelected"
       @node-clicked-in-timeline="handleNodeClickedInTimeline"
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
+      :highlight-node-id="overallHoveredNodeId"
     />
 
     <div
@@ -36,6 +37,8 @@
       :current-year-range="currentYearRange"
       @concept-selected="selectConcept"
       @center-on-year="handleCenterOnYear"
+      @node-hovered="handleNodeHoveredInTree"
+      :highlight-node-id="overallHoveredNodeId"
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
@@ -68,6 +71,9 @@
   /** For Hover Preview in Timeline */
   const hoveredNodeInTimeline = ref<Node | null>(null);
   const hoverPreviewPosition = ref<{ x: number; y: number } | null>(null);
+
+  /** Shared hover state for cross-component highlighting */
+  const overallHoveredNodeId = ref<string | null>(null);
 
   /** Legenden-Daten: Kategorien mit Farben aus D3-Scheme */
   const legendCategories = computed(() => {
@@ -117,13 +123,19 @@
     payload: { node: Node; event: MouseEvent } | null,
   ) {
     if (payload) {
-      hoveredNodeInTimeline.value = payload.node;
-      // Position tooltip slightly offset from cursor
+      hoveredNodeInTimeline.value = payload.node; // For existing tooltip
+      overallHoveredNodeId.value = payload.node.id; // Update shared hover ID
       hoverPreviewPosition.value = { x: payload.event.clientX + 10, y: payload.event.clientY + 10 };
     } else {
       hoveredNodeInTimeline.value = null;
+      overallHoveredNodeId.value = null; // Clear shared hover ID
       hoverPreviewPosition.value = null;
     }
+  }
+
+  /** Handler for node hover events from KiStammbaum.vue */
+  function handleNodeHoveredInTree(nodeId: string | null) {
+    overallHoveredNodeId.value = nodeId;
   }
 
   const yearFocusWindowSpan = 10;

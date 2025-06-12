@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, onBeforeUnmount, ref, watch, withDefaults } from 'vue';
+  import { onMounted, onBeforeUnmount, ref, watch, withDefaults, type PropType } from 'vue';
   import * as d3 from 'd3';
   import type { Node, Link } from '@/types/concept';
 
@@ -38,19 +38,18 @@
     childNodes?: Node[];  // Array of original nodes if it's a cluster
   }
 
-  const props = withDefaults(
-    defineProps<{
-      nodes?: Node[]; // Changed from GraphNode[] to Node[] as props.nodes are raw
-      links?: Link[];
-      usePhysics?: boolean;
-      currentYearRange: [number, number];
-    }>(),
-    { usePhysics: true },
-  );
+  const props = defineProps({
+    nodes: { type: Array as PropType<Node[] | undefined> },
+    links: { type: Array as PropType<Link[] | undefined> },
+    usePhysics: { type: Boolean, default: true },
+    currentYearRange: { type: Array as PropType<[number, number]>, required: true },
+    highlightNodeId: { type: String as PropType<string | null>, default: null } // New prop
+  });
 
   const emit = defineEmits<{
     conceptSelected: [node: GraphNode];
     centerOnYear: [year: number]; // New event for x-axis navigation
+    nodeHovered: [nodeId: string | null]; // New emit for hover events
   }>();
 
   /**
@@ -64,6 +63,9 @@
   /** Aktuelle D3-Simulation zur späteren Bereinigung */
   let simulation: d3.Simulation<GraphNode, Link> | null = null; // Updated Link type
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
+  let lastTransform: d3.ZoomTransform = d3.zoomIdentity;
+
+  const userPositionedNodes = ref<Map<string, { fy: number }>>(new Map());
 
   // Declare scales at a higher scope
   let xScale: d3.ScaleLinear<number, number> | null = null;
@@ -120,6 +122,7 @@
 
                 if (originalNodesInGroup.length > 1) { // Create a cluster node
                     const clusterId = `cluster-${year}-${category}`;
+                    const userSetClusterFy = userPositionedNodes.value.get(clusterId)?.fy;
                     displayNodes.push({
                         id: clusterId,
                         year: year,
@@ -131,16 +134,17 @@
                         count: originalNodesInGroup.length,
                         childNodes: originalNodesInGroup,
                         fx: null,
-                        fy: null,
+                        fy: userSetClusterFy ?? null,
                     });
                 } else { // Single node, add as is but typed as GraphNode
                     const originalNode = originalNodesInGroup[0];
+                    const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
                     const graphNodeVersion: GraphNode = {
                        ...originalNode,
                        isCluster: false,
                        count: 1,
                        fx: null,
-                       fy: null,
+                       fy: userSetFy ?? null,
                     };
                     displayNodes.push(graphNodeVersion);
                 }
@@ -175,6 +179,20 @@
       // fx/fy already initialized during displayNodes creation
     });
 
+    if (props.usePhysics) {
+      displayNodes.forEach((n: GraphNode) => {
+        if (xScale && typeof n.year === 'number') {
+          n.fx = xScale(n.year);
+          // Ensure fy is not unintentionally reset if it has a value.
+          // If n.fy is null, it means it hasn't been vertically positioned by a drag yet,
+          // so the Y force or initial Y position will take effect.
+          // If n.fy has a value (e.g., from a previous drag operation that didn't involve this specific link change),
+          // it should be preserved. The current structure where fx/fy are initialized to null
+          // and only set by drag or this new logic means fy will persist if previously set by a drag.
+        }
+      });
+    }
+
     // Farbskala pro Kategorie - Use categories from displayNodes for consistency
     const color = d3
       .scaleOrdinal<string>()
@@ -182,20 +200,28 @@
       .range(d3.schemeCategory10);
 
     // Hauptgruppe für alle grafischen Elemente
-    const g = svgSel.append('g');
+    const g = svgSel.append('g'); // Main group for elements that will be transformed
 
-    // Zoom- und Pan-Interaktion auf das gesamte SVG anwenden
-    // This should be called on svgSel, and the background rect will be part of svgSel.
-    // Zoom events should still work. Clicks on nodes will be handled by node click handlers.
-    // Clicks on the background rect will be handled by its handler.
-    zoomBehavior = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 5])
-      .on('zoom', (ev) => {
-        // Apply zoom transform to the main group 'g'
-        g.attr('transform', ev.transform.toString());
-      });
+    if (!zoomBehavior) { // Initialize zoomBehavior only if it's null
+        zoomBehavior = d3
+            .zoom<SVGSVGElement, unknown>()
+            .scaleExtent([0.5, 5])
+            .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+                // Note: event.transform is the new transform.
+                g.attr('transform', event.transform.toString());
+                lastTransform = event.transform; // Update lastTransform with the latest
+            });
+    }
+
+    // Always attach the zoom behavior to the SVG element.
     svgSel.call(zoomBehavior as any);
+
+    // Restore the last known transform.
+    // This call will also trigger the 'zoom' event, ensuring 'g' is transformed
+    // and 'lastTransform' is correctly set by the 'on.zoom' handler.
+    if (lastTransform && zoomBehavior) { // lastTransform should always exist due to initialization with d3.zoomIdentity
+        (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(svgSel as any, lastTransform);
+    }
 
     // --- LINK RE-MAPPING ---
     function findVisualNodeRepresenting(originalId: string, nodesToSearch: GraphNode[]): GraphNode | undefined {
@@ -232,8 +258,7 @@
     // Knoten zeichnen (use displayNodes)
     const node = g
       .append('g')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
+      // Default stroke and stroke-width are set here but will be overridden by individual node attrs if highlighted
       .selectAll('circle')
       .data(displayNodes, (d: GraphNode) => d.id) // Use displayNodes and GraphNode type for key func
       .join('circle')
@@ -242,8 +267,26 @@
           const baseColor = color(d.category)!;
           return d.isCluster ? d3.color(baseColor)?.darker(0.5).toString() ?? '#555' : baseColor;
       })
+      .attr('stroke', (d: GraphNode) => {
+        if (d.id === props.highlightNodeId) {
+          return 'orange'; // Highlight stroke color
+        }
+        return '#fff'; // Default stroke color
+      })
+      .attr('stroke-width', (d: GraphNode) => {
+        if (d.id === props.highlightNodeId) {
+          return 3; // Highlight stroke width
+        }
+        return 1.5; // Default stroke width
+      })
       .style('cursor', 'pointer')
-      .on('click', (_e, d) => emit('conceptSelected', d as GraphNode)); // d is now from displayNodes
+      .on('click', (_e, d) => emit('conceptSelected', d as GraphNode)) // d is now from displayNodes
+      .on('mouseover', (_e, d) => { // New mouseover handler
+        emit('nodeHovered', d.id);
+      })
+      .on('mouseout', (_e, _d) => { // New mouseout handler
+        emit('nodeHovered', null);
+      });
 
     // Labels hinzufügen (use displayNodes)
     const labels = g
@@ -392,6 +435,17 @@
           .attr('y1', (d: any) => (d.source as GraphNode).y!)
           .attr('x2', (d: any) => (d.target as GraphNode).x!)
           .attr('y2', (d: any) => (d.target as GraphNode).y!);
+      }
+
+      // Store the user-set fy value
+      if (props.usePhysics) {
+        if (subjectNode.fy !== null && subjectNode.fy !== undefined) {
+          userPositionedNodes.value.set(subjectNode.id, { fy: subjectNode.fy });
+        }
+      } else {
+        if (subjectNode.y !== null && subjectNode.y !== undefined) {
+          userPositionedNodes.value.set(subjectNode.id, { fy: subjectNode.y });
+        }
       }
     }
   }
