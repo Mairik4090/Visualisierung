@@ -31,7 +31,6 @@ function applyFilters() {
     year: yearFilter.value,
     type: typeFilter.value,
   };
-  console.log('Filter angewendet:', filters);
   emit('filtersApplied', filters);
 }
 </script>
