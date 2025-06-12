@@ -245,69 +245,102 @@
     }
     // --- END LINK RE-MAPPING ---
 
+    const transitionDuration = 300;
+
     // Links zeichnen (append to g, use visualLinks)
-    const link = g
+    const linkSelection = g
       .append('g')
       .attr('stroke', '#999')
       .attr('stroke-opacity', 0.6)
       .selectAll('line')
-      .data(visualLinks) // Use visualLinks
-      .join('line')
+      .data(visualLinks, (d: any) => `${d.source.id}-${d.target.id}`); // Key function for links
+
+    linkSelection.exit()
+      .transition().duration(transitionDuration)
+      .attr('stroke-opacity', 0)
+      .remove();
+
+    const linkEnter = linkSelection.enter().append('line')
+      .attr('stroke-opacity', 0)
       .attr('stroke-width', 1.5);
 
+    const linkUpdateAndEnter = linkEnter.merge(linkSelection);
+    // Specific attributes for links will be set in the if/else for props.usePhysics
+
+
     // Knoten zeichnen (use displayNodes)
-    const node = g
+    const nodeSelection = g
       .append('g')
-      // Default stroke and stroke-width are set here but will be overridden by individual node attrs if highlighted
       .selectAll('circle')
-      .data(displayNodes, (d: GraphNode) => d.id) // Use displayNodes and GraphNode type for key func
-      .join('circle')
-      .attr('r', (d: GraphNode) => d.isCluster ? 10 : 6) // Larger radius for clusters
-      .attr('fill', (d: GraphNode) => { // Darker color for clusters
+      .data(displayNodes, (d: GraphNode) => d.id);
+
+    nodeSelection.exit()
+      .transition().duration(transitionDuration)
+      .attr('r', 0)
+      .style('opacity', 0)
+      .remove();
+
+    const nodeEnter = nodeSelection.enter().append('circle')
+      .attr('r', 0)
+      .style('opacity', 0)
+      .attr('fill', (d: GraphNode) => {
           const baseColor = color(d.category)!;
           return d.isCluster ? d3.color(baseColor)?.darker(0.5).toString() ?? '#555' : baseColor;
       })
-      .attr('stroke', (d: GraphNode) => {
-        if (d.id === props.highlightNodeId) {
-          return 'orange'; // Highlight stroke color
-        }
-        return '#fff'; // Default stroke color
-      })
-      .attr('stroke-width', (d: GraphNode) => {
-        if (d.id === props.highlightNodeId) {
-          return 3; // Highlight stroke width
-        }
-        return 1.5; // Default stroke width
-      })
       .style('cursor', 'pointer')
-      .on('click', (_e, d) => emit('conceptSelected', d as GraphNode)) // d is now from displayNodes
-      .on('mouseover', (_e, d) => { // New mouseover handler
-        emit('nodeHovered', d.id);
-      })
-      .on('mouseout', (_e, _d) => { // New mouseout handler
-        emit('nodeHovered', null);
-      });
+      .on('click', (_e, d) => emit('conceptSelected', d as GraphNode))
+      .on('mouseover', (_e, d) => emit('nodeHovered', d.id))
+      .on('mouseout', (_e, _d) => emit('nodeHovered', null));
 
-    // Labels hinzufügen (use displayNodes)
-    const labels = g
-      .append('g')
-      .selectAll('text')
-      .data(displayNodes, (d: GraphNode) => d.id) // Use displayNodes and GraphNode type for key func
-      .join('text')
-      .attr('text-anchor', 'middle')
-      .style('font-size', '10px')
-      .style('fill', '#333')
-      .text((d: GraphNode) => d.name ?? d.id); // Cluster name or original name
+    const nodeUpdateAndEnter = nodeEnter.merge(nodeSelection);
+    // Specific attributes for nodes will be set in the if/else for props.usePhysics
 
-    node.call(
+    // Apply drag to all nodes (new and updating)
+    nodeUpdateAndEnter.call(
       d3
-        .drag<SVGCircleElement, GraphNode>() // d is GraphNode from displayNodes
+        .drag<SVGCircleElement, GraphNode>()
         .on('start', dragStarted)
         .on('drag', dragged)
         .on('end', dragEnded),
     );
 
+    // Labels hinzufügen (use displayNodes)
+    const labelSelection = g
+      .append('g')
+      .selectAll('text')
+      .data(displayNodes, (d: GraphNode) => d.id);
+
+    labelSelection.exit()
+      .transition().duration(transitionDuration)
+      .style('opacity', 0)
+      .remove();
+
+    const labelEnter = labelSelection.enter().append('text')
+      .style('opacity', 0)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '10px')
+      .style('fill', '#333')
+      .text((d: GraphNode) => d.name ?? d.id);
+
+    const labelUpdateAndEnter = labelEnter.merge(labelSelection);
+    // Specific attributes for labels will be set in the if/else for props.usePhysics
+
+
     if (props.usePhysics) {
+      // For physics, update positions in the tick function
+      nodeUpdateAndEnter // Apply to all nodes
+        .attr('r', (d: GraphNode) => d.isCluster ? 10 : 6) // Set radius immediately for physics
+        .style('opacity', 1) // Set opacity immediately
+        .attr('stroke', (d: GraphNode) => d.id === props.highlightNodeId ? 'orange' : '#fff')
+        .attr('stroke-width', (d: GraphNode) => d.id === props.highlightNodeId ? 3 : 1.5);
+        // cx, cy will be set by simulation
+
+      labelUpdateAndEnter.style('opacity', 1); // text and other attributes already set on enter
+        // x, y will be set by simulation in ticked function
+
+      linkUpdateAndEnter.attr('stroke-opacity', 0.6); // stroke-width already set on enter
+        // x1,y1,x2,y2 will be set by simulation
+
       simulation = d3
         .forceSimulation(displayNodes) // Use displayNodes
         .force(
@@ -323,30 +356,42 @@
         .on('tick', ticked);
     } else {
       // Render nodes directly using calculated/dragged positions from displayNodes
-      node
+      // Apply transitions for non-physics updates
+      nodeUpdateAndEnter
+        .transition().duration(transitionDuration)
         .attr('cx', (d: GraphNode) => d.x!)
-        .attr('cy', (d: GraphNode) => d.y!);
-      labels
+        .attr('cy', (d: GraphNode) => d.y!)
+        .attr('r', (d: GraphNode) => d.isCluster ? 10 : 6)
+        .style('opacity', 1)
+        .attr('stroke', (d: GraphNode) => d.id === props.highlightNodeId ? 'orange' : '#fff')
+        .attr('stroke-width', (d: GraphNode) => d.id === props.highlightNodeId ? 3 : 1.5);
+
+      labelUpdateAndEnter
+        .transition().duration(transitionDuration)
         .attr('x', (d: GraphNode) => d.x!)
-        .attr('y', (d: GraphNode) => (d.y ?? 0) - 12);
-      link // Using visualLinks, source/target are GraphNode from displayNodes
+        .attr('y', (d: GraphNode) => (d.y ?? 0) - 12) // Ensure y is defined for calculation
+        .style('opacity', 1);
+
+      linkUpdateAndEnter // Using visualLinks, source/target are GraphNode from displayNodes
+        .transition().duration(transitionDuration)
         .attr('x1', (d: any) => (d.source as GraphNode).x!)
         .attr('y1', (d: any) => (d.source as GraphNode).y!)
         .attr('x2', (d: any) => (d.target as GraphNode).x!)
-        .attr('y2', (d: any) => (d.target as GraphNode).y!);
+        .attr('y2', (d: any) => (d.target as GraphNode).y!)
+        .attr('stroke-opacity', 0.6);
     }
 
     // Ticked function updates positions for displayNodes and visualLinks
     function ticked() {
-      link // visualLinks
+      linkUpdateAndEnter // visualLinks (use the merged selection)
         .attr('x1', (d: any) => (d.source as GraphNode).x!)
         .attr('y1', (d: any) => (d.source as GraphNode).y!)
         .attr('x2', (d: any) => (d.target as GraphNode).x!)
         .attr('y2', (d: any) => (d.target as GraphNode).y!);
-      node
+      nodeUpdateAndEnter // (use the merged selection)
         .attr('cx', (d: any) => (d as GraphNode).x!)
         .attr('cy', (d: any) => (d as GraphNode).y!);
-      labels
+      labelUpdateAndEnter // (use the merged selection)
         .attr('x', (d: any) => (d as GraphNode).x!)
         .attr('y', (d: any) => ((d as GraphNode).y ?? 0) - 12);
     }

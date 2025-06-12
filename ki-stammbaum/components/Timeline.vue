@@ -27,6 +27,7 @@
     (e: 'rangeChanged', range: [number, number]): void;
     (e: 'nodeClickedInTimeline', node: Node): void;
     (e: 'nodeHoveredInTimeline', payload: { node: Node; event: MouseEvent } | null): void;
+    (e: 'rangeChangeEnd', range: [number, number]): void; // Add this line
   }>();
 
   const svg = ref<SVGSVGElement | null>(null);
@@ -50,11 +51,99 @@
     const zx = transform.rescaleX(x);
     // const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear)); // Removed barWidth
 
-    // Logic for drawing circles instead of bars will go here
-    // For now, just update axis and emit range
-    nodesGroup.selectAll('*').remove(); // Clear previous nodes before redrawing - simple approach
+    // const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear)); // Removed barWidth
 
+    const barWidth = 5;
+    const barHeight = 10;
+
+    // nodesGroup.selectAll('*').remove(); // Clear previous nodes before redrawing - simple approach
+
+    const rects = nodesGroup
+      .selectAll('rect')
+      .data(props.nodes, (d: any) => d.id); // Use node id as key
+
+    rects.exit()
+      .transition().duration(500)
+      .style('opacity', 0)
+      .remove();
+
+    rects.enter()
+      .append('rect')
+      .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
+      .attr('y', y(0) - barHeight / 2)
+      .attr('width', barWidth)
+      .attr('height', barHeight)
+      .attr('fill', (d: Node) => color(d.category))
+      .attr('stroke', (d: Node) => d.id === props.highlightNodeId ? 'black' : color(d.category))
+      .attr('stroke-width', (d: Node) => d.id === props.highlightNodeId ? 2 : 1)
+      .style('cursor', 'pointer')
+      .style('opacity', 0)
+      .on('click', (event: MouseEvent, d: Node) => {
+        emit('nodeClickedInTimeline', d);
+      })
+      .on('mouseover', (event: MouseEvent, d: Node) => {
+        emit('nodeHoveredInTimeline', { node: d, event });
+      })
+      .on('mouseout', () => {
+        emit('nodeHoveredInTimeline', null);
+      })
+      .transition().duration(500)
+      .style('opacity', 1);
+
+    rects.transition().duration(300)
+      .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
+      .attr('y', y(0) - barHeight / 2) // y position doesn't change on zoom, but x does
+      .attr('fill', (d: Node) => color(d.category)) // Color could change if categories are dynamic
+      .attr('stroke', (d: Node) => d.id === props.highlightNodeId ? 'black' : color(d.category))
+      .attr('stroke-width', (d: Node) => d.id === props.highlightNodeId ? 2 : 1);
+
+    // The following part handles existing elements (update selection from .join)
+    // No, the above rects.transition().duration(300) is the update selection.
+    // The .join('rect') syntax is more modern and handles enter/update/exit.
+    // Let's re-do this part using the .join() syntax for clarity and correctness.
+
+    // --- Re-doing the join logic ---
     nodesGroup
+      .selectAll('rect')
+      .data(props.nodes, (d: any) => d.id) // Use node id as key
+      .join(
+        enter => enter.append('rect')
+          .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
+          .attr('y', y(0) - barHeight / 2)
+          .attr('width', barWidth)
+          .attr('height', barHeight)
+          .style('opacity', 0)
+          .attr('fill', (d: Node) => color(d.category))
+          .attr('stroke', (d: Node) => d.id === props.highlightNodeId ? 'black' : color(d.category))
+          .attr('stroke-width', (d: Node) => d.id === props.highlightNodeId ? 2 : 1)
+          .style('cursor', 'pointer')
+          .on('click', (event: MouseEvent, d: Node) => {
+            emit('nodeClickedInTimeline', d);
+          })
+          .on('mouseover', (event: MouseEvent, d: Node) => {
+            emit('nodeHoveredInTimeline', { node: d, event });
+          })
+          .on('mouseout', () => {
+            emit('nodeHoveredInTimeline', null);
+          })
+          .call(enter => enter.transition().duration(500).style('opacity', 1)),
+        update => update
+          .call(update => update.transition().duration(300)
+            .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
+            // y, width, height don't change on typical updates unless barHeight/barWidth become dynamic
+            .attr('fill', (d: Node) => color(d.category)) // Potentially update color
+            .attr('stroke', (d: Node) => d.id === props.highlightNodeId ? 'black' : color(d.category))
+            .attr('stroke-width', (d: Node) => d.id === props.highlightNodeId ? 2 : 1)
+          ),
+        exit => exit
+          .call(exit => exit.transition().duration(500).style('opacity', 0).remove())
+      );
+    // Ensure event handlers are on the selection that includes new and updated elements.
+    // The .on() calls are correctly placed within the .join() 'enter' selection.
+    // For 'update' selection, if event handlers could change or need to be re-bound,
+    // they might need to be specified there too, but typically they persist.
+
+    /* This is the old circle code, for reference during refactoring
       .selectAll('circle')
       .data(props.nodes, (d: any) => d.id) // Use node id as key
       .join('circle')
@@ -144,6 +233,11 @@
         //   nodesGroup.selectAll('*').remove(); // Will be handled in draw
         // }
         draw(ev.transform);
+      })
+      .on('end', (ev) => { // Add this 'end' event handler
+        // ev.transform.rescaleX(x) should give the final scale
+        const finalXScale = ev.transform.rescaleX(x);
+        emit('rangeChangeEnd', finalXScale.domain() as [number, number]);
       });
 
     svgSel.call(zoomBehavior as any);
