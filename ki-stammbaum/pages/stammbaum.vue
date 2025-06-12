@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ layout: 'default' });
 import { computed, ref } from 'vue';
 import KiStammbaum from '@/components/KiStammbaum.vue';
 import FilterControls from '@/components/FilterControls.vue';
