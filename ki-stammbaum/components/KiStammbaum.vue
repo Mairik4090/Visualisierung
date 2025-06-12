@@ -3,6 +3,10 @@
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
       <title>KI-Stammbaum Visualisierung</title>
+      <g v-for="(node, index) in graphData.nodes" :key="node.id">
+        <circle :cx="20 + index * 30" cy="20" r="5" />
+        <text :x="20 + index * 30" y="35" text-anchor="middle">{{ node.name || node.id }}</text>
+      </g>
       <text v-if="pending" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
     </svg>
   </div>
@@ -24,6 +28,11 @@ const emit = defineEmits<{
   conceptSelected: [concept: KiConcept];
 }>();
 
+const props = defineProps<{
+  nodes?: Node[];
+  links?: Link[];
+}>();
+
 // Referenz auf das SVG-Element für D3.js-Manipulationen
 const svg = ref<SVGSVGElement | null>(null);
 
@@ -35,8 +44,11 @@ const { data, pending, error } = useStammbaumData();
  * Konvertiert die KiConcept-Daten in Nodes und Links für D3.js
  */
 const graphData = computed(() => {
+  if (props.nodes && props.nodes.length) {
+    return { nodes: props.nodes, links: props.links ?? [] };
+  }
   if (!data.value?.nodes) return { nodes: [], links: [] };
-  
+
   const concepts = data.value.nodes as KiConcept[];
   
   // Transformation zu Graph-Knoten

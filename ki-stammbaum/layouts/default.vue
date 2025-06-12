@@ -2,11 +2,9 @@
   <div>
     <header class="site-header">
       <nav>
-        <NuxtLink to="/">Start</NuxtLink>
-        |
-        <NuxtLink to="/stammbaum">Stammbaum</NuxtLink>
-        |
-        <NuxtLink to="/about">Über</NuxtLink>
+        <NuxtLink v-for="route in menuRoutes" :key="route.path" :to="route.path">
+          {{ route.name }}
+        </NuxtLink>
       </nav>
     </header>
     <main>
@@ -20,6 +18,13 @@
 
 <script setup lang="ts">
 // Grundlayout für alle Seiten
+import { computed } from 'vue';
+import { useRouter } from '#imports';
+
+const router = useRouter();
+const menuRoutes = computed(() =>
+  router.getRoutes().filter((r) => r.name && !r.path.includes(':'))
+);
 </script>
 
 <style scoped>
@@ -39,3 +44,4 @@ main {
   padding: 1rem;
 }
 </style>
+
