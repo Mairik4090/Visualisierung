@@ -38,35 +38,38 @@ function render(): void {
     count: countMap.get(y) ?? 0,
   }));
 
-  const x = d3.scaleLinear().domain([minYear, maxYear]).range([margin.left, width - margin.right]);
-  const y = d3.scaleLinear().domain([0, d3.max(data, (d) => d.count) ?? 1]).range([height - margin.bottom, margin.top]);
+  const x = d3.scaleLinear()
+    .domain([minYear, maxYear])
+    .range([margin.left, width - margin.right]);
+
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(data, (d) => d.count) ?? 1])
+    .range([height - margin.bottom, margin.top]);
 
   const g = svgSel.append('g');
-
   const barWidth = Math.max(1, (width - margin.left - margin.right) / data.length);
 
-  const bars = g
-    .append('g')
+  const bars = g.append('g')
     .attr('class', 'bars')
     .selectAll('rect')
     .data(data)
     .join('rect')
-    .attr('x', (d) => x(d.year) - barWidth / 2)
-    .attr('y', (d) => y(d.count))
-    .attr('width', barWidth)
-    .attr('height', (d) => height - margin.bottom - y(d.count))
-    .attr('fill', '#69b3a2');
+      .attr('x', (d) => x(d.year) - barWidth / 2)
+      .attr('y', (d) => y(d.count))
+      .attr('width', barWidth)
+      .attr('height', (d) => height - margin.bottom - y(d.count))
+      .attr('fill', '#69b3a2');
 
-  const axis = g
-    .append('g')
+  const axis = g.append('g')
     .attr('class', 'x-axis')
     .attr('transform', `translate(0,${height - margin.bottom})`)
     .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('d')));
 
+  // Initialer Emit des vollen Bereichs
   emit('rangeChanged', [minYear, maxYear]);
 
-  const zoom = d3
-    .zoom<SVGSVGElement, unknown>()
+  // Zoom- und Pan-Interaktion
+  const zoom = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([1, 8])
     .translateExtent([
       [margin.left, 0],
@@ -74,10 +77,14 @@ function render(): void {
     ])
     .on('zoom', (ev) => {
       const zx = ev.transform.rescaleX(x);
+
       bars
         .attr('x', (d) => zx(d.year) - barWidth / 2)
         .attr('width', Math.max(1, zx(data[1].year) - zx(data[0].year)));
+
       axis.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
+
+      // Emit bei jedem Zoom-Event
       emit('rangeChanged', zx.domain() as [number, number]);
     });
 
@@ -88,7 +95,7 @@ onMounted(render);
 watch(
   () => props.nodes,
   () => render(),
-  { deep: true },
+  { deep: true }
 );
 </script>
 
