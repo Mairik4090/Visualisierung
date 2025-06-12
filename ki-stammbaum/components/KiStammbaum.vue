@@ -99,10 +99,19 @@
       });
 
     // X-Skala nach Jahr - NOW USES currentYearRange
+    // --- START NODE FILTERING ---
+    let filteredNodes: Node[] = [];
+    if (props.nodes && props.nodes.length > 0) {
+      filteredNodes = props.nodes.filter(node =>
+        node.year >= props.currentYearRange[0] && node.year <= props.currentYearRange[1]
+      );
+    }
+    // --- END NODE FILTERING ---
+
     // --- START CLUSTERING LOGIC ---
     const displayNodes: GraphNode[] = [];
-    if (props.nodes && props.nodes.length > 0) {
-        const groupedByYearAndCategory = d3.group(props.nodes, d => d.year, d => d.category);
+    if (filteredNodes.length > 0) { // Use filteredNodes here
+        const groupedByYearAndCategory = d3.group(filteredNodes, d => d.year, d => d.category); // Use filteredNodes here
 
         groupedByYearAndCategory.forEach((categoriesInYear, yearVal) => {
             categoriesInYear.forEach((originalNodesInGroup, categoryVal) => {
