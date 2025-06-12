@@ -34,6 +34,30 @@ describe('Timeline', () => {
     expect(range).toEqual([2000, 2002]);
   });
 
+  it('emits new range when zoom buttons are used', async () => {
+    const wrapper = mount(Timeline, {
+      props: {
+        nodes: [
+          { id: 'a', name: 'A', year: 2000 },
+          { id: 'b', name: 'B', year: 2001 },
+          { id: 'c', name: 'C', year: 2002 },
+        ],
+      },
+    });
+
+    const initial = wrapper.emitted<'rangeChanged'>('rangeChanged')![0][0];
+
+    await wrapper.find('button.zoom-in').trigger('click');
+    const eventsAfterZoomIn = wrapper.emitted<'rangeChanged'>('rangeChanged')!;
+    const afterZoomIn = eventsAfterZoomIn[eventsAfterZoomIn.length - 1][0];
+    expect(afterZoomIn).not.toEqual(initial);
+
+    await wrapper.find('button.zoom-out').trigger('click');
+    const eventsAfterZoomOut = wrapper.emitted<'rangeChanged'>('rangeChanged')!;
+    const afterZoomOut = eventsAfterZoomOut[eventsAfterZoomOut.length - 1][0];
+    expect(afterZoomOut).not.toEqual(afterZoomIn);
+  });
+
   it('emits yearSelected when a bar is clicked', async () => {
     const wrapper = mount(Timeline, {
       props: {
@@ -61,7 +85,8 @@ describe('Timeline', () => {
     const initialBars = wrapper.findAll('rect').length;
     expect(initialBars).toBe(2);
 
-    (wrapper.vm as any).applyZoom(4);
+    // programmatischer Zoom via applyZoom
+    ;(wrapper.vm as any).applyZoom(4);
     await wrapper.vm.$nextTick();
 
     const zoomedBars = wrapper.findAll('rect').length;

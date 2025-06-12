@@ -1,5 +1,11 @@
 <template>
-  <svg ref="svg" class="timeline-svg" aria-label="Zeitstrahl" />
+  <div class="timeline-container">
+    <svg ref="svg" class="timeline-svg" aria-label="Zeitstrahl" />
+    <div class="zoom-controls">
+      <button type="button" class="zoom-in" @click="zoomIn">+</button>
+      <button type="button" class="zoom-out" @click="zoomOut">−</button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -21,6 +27,7 @@ const emit = defineEmits<{
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
+
 /** Aktueller Zoomfaktor der Timeline */
 const zoomScale = ref(1);
 
@@ -28,7 +35,7 @@ let minYear = 0;
 let maxYear = 0;
 let x: d3.ScaleLinear<number, number>;
 let y: d3.ScaleLinear<number, number>;
-let zoom: d3.ZoomBehavior<SVGSVGElement, unknown>;
+let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown>;
 let barsGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let axisGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let data: { year: number; count: number }[] = [];
@@ -64,7 +71,7 @@ function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
 
   const rects = barsGroup
     .selectAll<SVGRectElement, { year: number; count: number }>('rect')
-    .data(data, d => d.year);
+    .data(data, d => d.year as any);
 
   // Enter + Update + Exit
   rects.join('rect')
@@ -111,7 +118,8 @@ function render(): void {
     .attr('class', 'x-axis')
     .attr('transform', `translate(0,${height - margin.bottom})`);
 
-  zoom = d3.zoom<SVGSVGElement, unknown>()
+  // Zoom- und Pan-Interaktion
+  zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
     .scaleExtent([1, 8])
     .translateExtent([
       [margin.left, 0],
@@ -129,13 +137,28 @@ function render(): void {
       draw(ev.transform);
     });
 
-  svgSel.call(zoom as any);
+  svgSel.call(zoomBehavior as any);
   draw();
 }
 
+/** Zoomt den Zeitstrahl hinein */
+function zoomIn(): void {
+  if (svg.value && zoomBehavior) {
+    zoomBehavior.scaleBy(d3.select(svg.value), 1.2);
+  }
+}
+
+/** Zoomt den Zeitstrahl heraus */
+function zoomOut(): void {
+  if (svg.value && zoomBehavior) {
+    zoomBehavior.scaleBy(d3.select(svg.value), 1 / 1.2);
+  }
+}
+
+/** Programmatisches Setzen des Zoomfaktors */
 function applyZoom(scale: number) {
-  if (svg.value) {
-    d3.select(svg.value).call(zoom.scaleTo as any, scale);
+  if (svg.value && zoomBehavior) {
+    d3.select(svg.value).call(zoomBehavior.scaleTo as any, scale);
   }
 }
 
@@ -153,9 +176,32 @@ watch(
 </script>
 
 <style scoped>
+.timeline-container {
+  position: relative;
+}
+
 .timeline-svg {
   width: 100%;
   height: 100px;
   cursor: grab;
+}
+
+.zoom-controls {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoom-controls button {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.25rem;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
 }
 </style>
