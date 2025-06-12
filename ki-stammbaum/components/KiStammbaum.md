@@ -16,4 +16,4 @@ Datenänderungen oder nach dem Mount automatisch neu gezeichnet.
 
 ## D3‑Zeitleistenverhalten
 
-Die Knoten werden entlang einer Zeitachse angeordnet. D3 berechnet aus dem `year` jedes Knotens die x‑Position, während eine Force‑Simulation für die y‑Verteilung sorgt.
+Die Knoten werden entlang einer Zeitachse angeordnet. D3 berechnet aus dem `year` jedes Knotens die x-Position. Eine Force-Simulation sorgt dafür, dass sich die Punkte dynamisch bewegen und über ihre Links verbunden bleiben.
