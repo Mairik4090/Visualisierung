@@ -1,48 +1,70 @@
-
 /**
- * Composable to load the KI tree data once and provide
- * reactive state for other components.
+ * Composable zum Laden und Cachen der KI-Stammbaum-Daten
+ * Stellt reaktive Zustände für mehrere Komponenten zur Verfügung
  */
 import { shallowRef, type Ref } from 'vue';
 
-// Cache for the fetched data so multiple components share the same result.
-const cachedData: Ref<unknown | null> = shallowRef(null);
-const pendingState = shallowRef(false);
-const errorState = shallowRef<unknown | null>(null);
+/**
+ * Interface für die Struktur der Stammbaum-Daten
+ */
+interface StammbaumData {
+  nodes: any[];
+  [key: string]: any;
+}
+
+// Globaler Cache für die geladenen Daten - wird zwischen allen Composable-Instanzen geteilt
+const dataCache: Ref<StammbaumData | null> = shallowRef(null);
+
+// Globaler Zustand für laufende Anfragen - verhindert mehrfache gleichzeitige Requests
+const pendingCache = shallowRef(false);
+
+// Globaler Fehlerzustand - speichert den letzten aufgetretenen Fehler
+const errorCache = shallowRef<Error | null>(null);
 
 /**
- * Fetches `/data/ki-stammbaum.json` and returns reactive refs.
- * The data is cached across calls.
+ * Lädt die Stammbaum-Daten von der API
+ * Verwendet Caching um mehrfache Requests zu vermeiden
+ */
+async function loadData(): Promise<void> {
+  // Frühzeitiger Ausstieg wenn Daten bereits geladen oder Request läuft
+  if (dataCache.value || pendingCache.value) {
+    return;
+  }
+
+  // Ladezustand setzen und vorherige Fehler zurücksetzen
+  pendingCache.value = true;
+  errorCache.value = null;
+
+  try {
+    // Daten von der API laden und in den Cache speichern
+    const result = await $fetch<StammbaumData>('/data/ki-stammbaum.json');
+    dataCache.value = result;
+  } catch (err) {
+    // Fehler erfassen und in typisierter Form speichern
+    errorCache.value = err as Error;
+  } finally {
+    // Ladezustand in jedem Fall zurücksetzen
+    pendingCache.value = false;
+  }
+}
+
+/**
+ * Hauptfunktion des Composables
+ * Stellt reaktive Referenzen auf Daten, Ladezustand und Fehler zur Verfügung
+ * 
+ * @returns Objekt mit reaktiven Referenzen für data, pending und error
  */
 export function useStammbaumData() {
-  const data = shallowRef<unknown | null>(cachedData.value);
-
-  async function load() {
-    if (cachedData.value || pendingState.value) {
-      data.value = cachedData.value;
-      return;
-    }
-    pendingState.value = true;
-    errorState.value = null;
-    try {
-      const result = await $fetch('/data/ki-stammbaum.json');
-      cachedData.value = result;
-      data.value = result;
-    } catch (err) {
-      errorState.value = err;
-    } finally {
-      pendingState.value = false;
-    }
+  // Automatisches Laden initiieren wenn noch keine Daten vorhanden und kein Request läuft
+  if (!dataCache.value && !pendingCache.value) {
+    // Fire-and-forget Aufruf - Komponenten können den pending-Zustand überwachen
+    loadData();
   }
 
-  if (!cachedData.value) {
-    // Trigger the initial load on first use.
-    load();
-  }
-
+  // Reaktive Referenzen zurückgeben die von allen Komponenten geteilt werden
   return {
-    data,
-    pending: pendingState,
-    error: errorState,
+    data: dataCache,     // Die geladenen Stammbaum-Daten
+    pending: pendingCache, // Boolean ob gerade geladen wird
+    error: errorCache    // Eventuell aufgetretener Fehler
   };
 }
