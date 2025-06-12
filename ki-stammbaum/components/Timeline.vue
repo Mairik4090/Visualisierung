@@ -10,10 +10,14 @@ import type { Node } from '@/types/concept';
 /**
  * Timeline component visualizing the distribution of nodes over the years.
  * Allows zooming and panning on the x-axis.
+ * Emits:
+ *  - 'rangeChanged' with the current visible [minYear, maxYear]
+ *  - 'yearSelected' when a bar is clicked
  */
 const props = defineProps<{ nodes: Node[] }>();
 const emit = defineEmits<{
   (e: 'rangeChanged', range: [number, number]): void;
+  (e: 'yearSelected', year: number): void;
 }>();
 
 const svg = ref<SVGSVGElement | null>(null);
@@ -31,17 +35,21 @@ let data: { year: number; count: number }[] = [];
 let currentBinSize = 1;
 
 function binSizeForScale(scale: number): number {
-  if (scale < 1.5) return 10; // decade
-  if (scale < 3) return 5; // five-year
-  return 1; // yearly
+  if (scale < 1.5) return 10; // Jahrzehnt
+  if (scale < 3) return 5;   // Fünf-Jahres-Intervall
+  return 1;                   // Einzelnes Jahr
 }
 
 function binnedData(binSize: number): { year: number; count: number }[] {
-  const counts = d3.rollups(props.nodes, (v) => v.length, (d) => Math.floor(d.year / binSize) * binSize);
+  const counts = d3.rollups(
+    props.nodes,
+    v => v.length,
+    d => Math.floor(d.year / binSize) * binSize
+  );
   const countMap = new Map(counts);
   const start = Math.floor(minYear / binSize) * binSize;
   const end = Math.ceil((maxYear + 1) / binSize) * binSize - 1;
-  const result = [] as { year: number; count: number }[];
+  const result: { year: number; count: number }[] = [];
   for (let yv = start; yv <= end; yv += binSize) {
     result.push({ year: yv, count: countMap.get(yv) ?? 0 });
   }
@@ -54,16 +62,20 @@ function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
   const zx = transform.rescaleX(x);
   const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear));
 
-  const rects = barsGroup.selectAll('rect').data(data, (d: any) => d.year);
-  rects
-    .join('rect')
-    .attr('fill', '#69b3a2');
+  const rects = barsGroup
+    .selectAll<SVGRectElement, { year: number; count: number }>('rect')
+    .data(data, d => d.year);
+
+  // Enter + Update + Exit
+  rects.join('rect')
+    .attr('fill', '#69b3a2')
+    .on('click', (_, d) => emit('yearSelected', d.year));
 
   rects
-    .attr('x', (d) => zx(d.year + currentBinSize / 2) - barWidth / 2)
+    .attr('x', d => zx(d.year + currentBinSize / 2) - barWidth / 2)
     .attr('width', barWidth)
-    .attr('y', (d) => y(d.count))
-    .attr('height', (d) => y(0) - y(d.count));
+    .attr('y', d => y(d.count))
+    .attr('height', d => y(0) - y(d.count));
 
   axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
 
@@ -71,7 +83,7 @@ function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
 }
 
 function render(): void {
-  if (!svg.value || !props.nodes || props.nodes.length === 0) return;
+  if (!svg.value || !props.nodes.length) return;
 
   const svgSel = d3.select(svg.value);
   svgSel.selectAll('*').remove();
@@ -80,7 +92,7 @@ function render(): void {
   const height = svg.value.clientHeight || 100;
   const margin = { top: 10, right: 20, bottom: 20, left: 20 };
 
-  const years = props.nodes.map((d) => d.year);
+  const years = props.nodes.map(d => d.year);
   [minYear, maxYear] = d3.extent(years) as [number, number];
 
   x = d3.scaleLinear()
@@ -89,8 +101,9 @@ function render(): void {
 
   currentBinSize = binSizeForScale(zoomScale.value);
   data = binnedData(currentBinSize);
+
   y = d3.scaleLinear()
-    .domain([0, d3.max(data, (d) => d.count) ?? 1])
+    .domain([0, d3.max(data, d => d.count) ?? 1])
     .range([height - margin.bottom, margin.top]);
 
   barsGroup = svgSel.append('g').attr('class', 'bars');
@@ -104,20 +117,19 @@ function render(): void {
       [margin.left, 0],
       [width - margin.right, height],
     ])
-    .on('zoom', (ev) => {
+    .on('zoom', ev => {
       zoomScale.value = ev.transform.k;
       const newSize = binSizeForScale(zoomScale.value);
       if (newSize !== currentBinSize) {
         currentBinSize = newSize;
         data = binnedData(currentBinSize);
-        y.domain([0, d3.max(data, (d) => d.count) ?? 1]);
+        y.domain([0, d3.max(data, d => d.count) ?? 1]);
         barsGroup.selectAll('rect').remove();
       }
       draw(ev.transform);
     });
 
   svgSel.call(zoom as any);
-
   draw();
 }
 

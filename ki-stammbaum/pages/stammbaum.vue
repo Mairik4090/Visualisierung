@@ -9,6 +9,7 @@
       v-if="graph.nodes.length"
       :nodes="graph.nodes"
       @rangeChanged="updateRange"
+      @yearSelected="onYearSelected"
     />
 
     <div v-if="pending">Daten werden geladen...</div>
@@ -60,6 +61,15 @@ function onFilters(filters: any) {
 // Empfang des neuen Jahresbereichs von der Timeline
 function updateRange(range: [number, number]) {
   timelineRange.value = range;
+}
+
+// Klick auf einen Balken in der Timeline
+function onYearSelected(year: number) {
+  timelineRange.value = [year, year];
+  const nodes = filteredNodes.value;
+  if (nodes.length === 1) {
+    selectConcept(nodes[0]);
+  }
 }
 
 // Filtert die Rohdaten nach dem aktuellen Timeline-Bereich
