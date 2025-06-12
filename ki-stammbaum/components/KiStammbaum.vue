@@ -11,8 +11,8 @@
 <script setup lang="ts">
 // Vue Composition API Imports für Lifecycle und Reaktivität
 import { onMounted, ref, watch } from 'vue';
-// Import des zentralen KiConcept-Typs aus der Typdefinitionsdatei
-import type { KiConcept } from '@/types/concept';
+// Import des zentralen Concept-Typs aus der Typdefinitionsdatei
+import type { Concept } from '@/types/concept';
 // Import des Composables zum Laden der Stammbaum-Daten
 import { useStammbaumData } from '@/composables/useStammbaumData';
 
@@ -21,7 +21,7 @@ import { useStammbaumData } from '@/composables/useStammbaumData';
  * conceptSelected: Wird ausgelöst wenn ein Knoten im Stammbaum angeklickt wird
  */
 const emit = defineEmits<{
-  conceptSelected: [concept: KiConcept];
+  conceptSelected: [concept: Concept];
 }>();
 
 // Referenz auf das SVG-Element für D3.js-Manipulationen
@@ -55,7 +55,7 @@ onMounted(() => {
  * 
  * @param concept - Das angeklickte KI-Konzept
  */
-function handleNodeClick(concept: KiConcept): void {
+function handleNodeClick(concept: Concept): void {
   emit('conceptSelected', concept);
 }
 </script>
