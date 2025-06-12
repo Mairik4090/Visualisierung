@@ -3,37 +3,29 @@
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
       <title>KI-Stammbaum Visualisierung</title>
-      <text v-if="!props.data.length" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
+      <text v-if="pending" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
     </svg>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
-
-const props = defineProps({
-  data: {
-    type: Array,
-    required: true,
-  },
-});
+import { useStammbaumData } from '@/composables/useStammbaumData';
 
 const emit = defineEmits(['conceptSelected']);
 
-const svg = ref(null);
+const svg = ref<SVGSVGElement | null>(null);
+const { data, pending } = useStammbaumData();
 
-watch(() => props.data, (newData) => {
+watch(data, (newData) => {
   if (newData && svg.value) {
-    console.log('Daten für D3 aktualisiert:', newData.length, 'Konzepte');
+    console.log('Daten für D3 aktualisiert:', (newData as any).length, 'Konzepte');
     // renderD3Visualization(newData); // Später implementieren
   }
 }, { immediate: true });
 
 onMounted(() => {
   console.log('KiStammbaum Komponente mounted. SVG-Element:', svg.value);
-  // if (props.data.length > 0) {
-  //   renderD3Visualization(props.data); // Später implementieren
-  // }
 });
 
 function handleNodeClick(concept) {
@@ -49,8 +41,10 @@ function handleNodeClick(concept) {
  * @property {string} description - Kurze Beschreibung des Konzepts.
  */
 /**
- * Die KiStammbaum-Komponente ist für die rendering der interaktiven D3.js-Visualisierung des KI-Stammbaums zuständig.
- * Sie empfängt die Daten über die 'data' Prop und aktualisiert die Visualisierung, wenn sich die Daten ändern.
+ * Die KiStammbaum-Komponente ist für die Rendering der interaktiven
+ * D3.js-Visualisierung des KI-Stammbaums zuständig. Die benötigten Daten
+ * werden über das `useStammbaumData`-Composable geladen und bei Änderungen
+ * erneut an D3 übergeben.
  */
 </script>
 

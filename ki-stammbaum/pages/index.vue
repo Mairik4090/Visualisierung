@@ -8,12 +8,9 @@
 </template>
 
 <script setup lang="ts">
-  // Use runtime config so the fetch path respects the app base URL.
-  const config = useRuntimeConfig();
-  // Build the full URL to the JSON file using the runtime base URL. The trailing
-  // slash is trimmed to avoid duplicated path separators.
-  const jsonUrl = `${config.app.baseURL.replace(/\/$/, '')}/data/ki-stammbaum.json`;
-  const { data: treeData, pending, error } = await useFetch(jsonUrl);
+  import { useStammbaumData } from '@/composables/useStammbaumData';
+
+  const { data: treeData, pending, error } = useStammbaumData();
 </script>
 
 <style scoped>
