@@ -12,6 +12,12 @@ Abhängigkeiten werden mit pnpm installiert:
 pnpm install
 ```
 
+### Offline-Nutzung
+
+Stellen Sie sicher, dass alle Abhängigkeiten und die Datei `public/data/ki-stammbaum.json`
+lokal verfügbar sind. Die Anwendung lädt die Daten direkt aus dieser Datei und benötigt
+keine Internetverbindung.
+
 ## Entwicklungsserver
 
 Starten Sie den lokalen Server unter `http://localhost:3000`:
