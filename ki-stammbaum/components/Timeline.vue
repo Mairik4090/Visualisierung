@@ -22,80 +22,53 @@
   const props = defineProps<{ nodes: Node[] }>();
   const emit = defineEmits<{
     (e: 'rangeChanged', range: [number, number]): void;
-    (e: 'yearSelected', year: number): void;
+    (e: 'nodeClickedInTimeline', node: Node): void;
+    (e: 'nodeHoveredInTimeline', payload: { node: Node; event: MouseEvent } | null): void;
   }>();
 
   const svg = ref<SVGSVGElement | null>(null);
-  const zoomScale = ref(1);
+  const zoomScale = ref(1); // Still useful for controlling zoom level if needed elsewhere or for debugging
 
   let minYear = 0;
   let maxYear = 0;
   let x: d3.ScaleLinear<number, number>;
-  let y: d3.ScaleLinear<number, number>;
+  let y: d3.ScaleLinear<number, number>; // Will be simplified
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown>;
-  let barsGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+  let nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>; // Renamed from barsGroup
   let axisGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  let data: any[] = [];
-  let currentBinSize = 1;
   let categories: string[] = [];
   let color: d3.ScaleOrdinal<string, string>;
-  let stackData: d3.Series<any, string>[];
 
-  /** Bestimmt die Bin-Größe basierend auf dem Zoom-Faktor */
-  function binSizeForScale(scale: number): number {
-    if (scale < 1.5) return 10;
-    if (scale < 3) return 5;
-    return 1;
-  }
+  // Removed binSizeForScale and binnedData functions as they are no longer needed
 
-  /** Erstellt die gruppierten Daten pro Jahr und Kategorie */
-  function binnedData(binSize: number): any[] {
-    const cats = Array.from(new Set(props.nodes.map((n) => n.category)));
-    const rolled = d3.rollups(
-      props.nodes,
-      (v) => v.length,
-      (d) => Math.floor(d.year / binSize) * binSize,
-      (d) => d.category,
-    );
-    const map = new Map<number, Map<string, number>>();
-    rolled.forEach(([yr, catCounts]) => map.set(yr, new Map(catCounts)));
-
-    const start = Math.floor(minYear / binSize) * binSize;
-    const end = Math.ceil((maxYear + 1) / binSize) * binSize - 1;
-    const result: any[] = [];
-    for (let yv = start; yv <= end; yv += binSize) {
-      const entry: Record<string, number> = { year: yv };
-      cats.forEach((c) => (entry[c] = map.get(yv)?.get(c) ?? 0));
-      result.push(entry);
-    }
-    return result;
-  }
-
-  /** Zeichnet Balken und Achse unter gegebenem Zoom-Transform */
+  /** Zeichnet Knoten und Achse unter gegebenem Zoom-Transform */
   function draw(transform: d3.ZoomTransform = d3.zoomIdentity): void {
-    if (!svg.value) return;
+    if (!svg.value || !props.nodes) return; // Check props.nodes as well
     const zx = transform.rescaleX(x);
-    const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear));
+    // const barWidth = Math.max(1, zx(minYear + currentBinSize) - zx(minYear)); // Removed barWidth
 
-    const series = barsGroup
-      .selectAll('g')
-      .data(stackData, (d: any) => d.key)
-      .join('g')
-      .attr('fill', (d: any) => color(d.key));
+    // Logic for drawing circles instead of bars will go here
+    // For now, just update axis and emit range
+    nodesGroup.selectAll('*').remove(); // Clear previous nodes before redrawing - simple approach
 
-    series
-      .selectAll('rect')
-      .data((d: any) => d)
-      .join('rect')
-      .attr(
-        'x',
-        (d: any) => zx(d.data.year + currentBinSize / 2) - barWidth / 2,
-      )
-      .attr('width', barWidth)
-      .attr('y', (d: any) => y(d[1]))
-      .attr('height', (d: any) => y(d[0]) - y(d[1]))
+    nodesGroup
+      .selectAll('circle')
+      .data(props.nodes, (d: any) => d.id) // Use node id as key
+      .join('circle')
+      .attr('cx', (d: Node) => zx(d.year))
+      .attr('cy', y(0)) // Simple vertical centering for now (y(0) will be middle)
+      .attr('r', 4) // Fixed radius
+      .attr('fill', (d: Node) => color(d.category))
       .style('cursor', 'pointer')
-      .on('click', (_e, d: any) => emit('yearSelected', d.data.year));
+      .on('click', (event: MouseEvent, d: Node) => {
+        emit('nodeClickedInTimeline', d);
+      })
+      .on('mouseover', (event: MouseEvent, d: Node) => {
+        emit('nodeHoveredInTimeline', { node: d, event });
+      })
+      .on('mouseout', () => {
+        emit('nodeHoveredInTimeline', null);
+      });
 
     axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
     emit('rangeChanged', zx.domain() as [number, number]);
@@ -114,6 +87,12 @@
 
     const years = props.nodes.map((d) => d.year);
     [minYear, maxYear] = d3.extent(years) as [number, number];
+    if (minYear === undefined || maxYear === undefined) {
+        // Handle case with no valid years, perhaps set a default range or return
+        minYear = new Date().getFullYear() - 10;
+        maxYear = new Date().getFullYear();
+    }
+
 
     categories = Array.from(new Set(props.nodes.map((d) => d.category)));
     color = d3
@@ -123,19 +102,20 @@
 
     x = d3
       .scaleLinear()
-      .domain([minYear, maxYear])
+      .domain([minYear, maxYear + 1]) // Add +1 to maxYear to ensure last year's nodes are not cut off at the edge
       .range([margin.left, width - margin.right]);
 
-    currentBinSize = binSizeForScale(zoomScale.value);
-    data = binnedData(currentBinSize);
-    stackData = d3.stack().keys(categories)(data);
+    // currentBinSize = binSizeForScale(zoomScale.value); // Removed
+    // data = binnedData(currentBinSize); // Removed
+    // stackData = d3.stack().keys(categories)(data); // Removed
 
+    // Simplified Y scale - centers all nodes vertically
     y = d3
       .scaleLinear()
-      .domain([0, d3.max(stackData, (s) => d3.max(s, (d) => d[1])) ?? 1])
-      .range([height - margin.bottom, margin.top]);
+      .domain([-1, 1]) // Arbitrary domain for centering, 0 will be the middle
+      .range([height - margin.bottom, margin.top]); // y(0) will be vertical center
 
-    barsGroup = svgSel.append('g').attr('class', 'bars');
+    nodesGroup = svgSel.append('g').attr('class', 'nodes'); // Renamed from barsGroup
     axisGroup = svgSel
       .append('g')
       .attr('class', 'x-axis')
@@ -143,21 +123,21 @@
 
     zoomBehavior = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 8])
+      .scaleExtent([1, 15]) // Increased max zoom slightly
       .translateExtent([
-        [margin.left, 0],
-        [width - margin.right, height],
+        [0, 0], // Allow panning to full extent of data with some margin
+        [width, height],
       ])
       .on('zoom', (ev) => {
         zoomScale.value = ev.transform.k;
-        const newSize = binSizeForScale(zoomScale.value);
-        if (newSize !== currentBinSize) {
-          currentBinSize = newSize;
-          data = binnedData(currentBinSize);
-          stackData = d3.stack().keys(categories)(data);
-          y.domain([0, d3.max(stackData, (s) => d3.max(s, (d) => d[1])) ?? 1]);
-          barsGroup.selectAll('*').remove();
-        }
+        // const newSize = binSizeForScale(zoomScale.value); // Removed
+        // if (newSize !== currentBinSize) { // Removed block
+        //   currentBinSize = newSize;
+        //   data = binnedData(currentBinSize);
+        //   stackData = d3.stack().keys(categories)(data);
+        //   y.domain([0, d3.max(stackData, (s) => d3.max(s, (d) => d[1])) ?? 1]); // y domain is now fixed
+        //   nodesGroup.selectAll('*').remove(); // Will be handled in draw
+        // }
         draw(ev.transform);
       });
 
