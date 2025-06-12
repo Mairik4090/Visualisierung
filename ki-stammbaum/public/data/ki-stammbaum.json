@@ -1,6 +1,3 @@
-Gerne, hier ist die `ki-stammbaum.json` basierend auf deiner bereitgestellten Struktur. Ich habe sie mit beispielhaften KI-Konzepten, ihren Entstehungsjahren und Abhängigkeiten befüllt, um die "Evolution der künstlichen Intelligenz" darzustellen.
-
-```json
 {
   "name": "KI Stammbaum",
   "version": "1.0",
@@ -141,4 +138,3 @@ Gerne, hier ist die `ki-stammbaum.json` basierend auf deiner bereitgestellten St
     }
   ]
 }
-```
