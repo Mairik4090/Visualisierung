@@ -3,7 +3,6 @@
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
       <title>KI-Stammbaum Visualisierung</title>
-      <text v-if="pending" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
     </svg>
   </div>
 </template>
@@ -11,10 +10,8 @@
 <script setup lang="ts">
 // Vue Composition API Imports für Lifecycle und Reaktivität
 import { onMounted, ref, watch } from 'vue';
-// Import des zentralen KiConcept-Typs aus der Typdefinitionsdatei
-import type { KiConcept } from '@/types/concept';
-// Import des Composables zum Laden der Stammbaum-Daten
-import { useStammbaumData } from '@/composables/useStammbaumData';
+// Import des zentralen KiConcept-Typs und Graph-Types aus der Typdefinitionsdatei
+import type { KiConcept, Node, Link } from '@/types/concept';
 
 /**
  * Event-Emitter für Kommunikation mit der Parent-Komponente
@@ -24,22 +21,29 @@ const emit = defineEmits<{
   conceptSelected: [concept: KiConcept];
 }>();
 
+// Props für die bereits transformierten Graph-Daten
+const props = defineProps<{
+  nodes: Node[];
+  links: Link[];
+}>();
+
 // Referenz auf das SVG-Element für D3.js-Manipulationen
 const svg = ref<SVGSVGElement | null>(null);
-
-// Laden der Stammbaum-Daten über das Composable
-const { data, pending } = useStammbaumData();
 
 /**
  * Watcher für Datenänderungen
  * Wird ausgelöst sobald neue Daten verfügbar sind und initiiert die D3-Visualisierung
  */
-watch(data, (newData) => {
-  if (newData && svg.value) {
-    console.log('Daten für D3 aktualisiert:', (newData as any).length, 'Konzepte');
-    // renderD3Visualization(newData); // Später implementieren
-  }
-}, { immediate: true });
+watch(
+  () => props.nodes,
+  (newNodes) => {
+    if (newNodes && svg.value) {
+      console.log('Graph aktualisiert:', newNodes.length, 'Knoten');
+      // renderD3Visualization({ nodes: newNodes, links: props.links });
+    }
+  },
+  { immediate: true },
+);
 
 /**
  * Lifecycle Hook - wird nach dem Mounten der Komponente ausgeführt
