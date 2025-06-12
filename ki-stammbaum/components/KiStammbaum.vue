@@ -1,7 +1,10 @@
 <template>
   <div class="ki-stammbaum-container">
     <h2>KI-Stammbaum Visualisierung</h2>
-    <svg ref="svg" class="ki-stammbaum-svg"></svg>
+    <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
+      <title>KI-Stammbaum Visualisierung</title>
+      <text v-if="!props.data.length" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
+    </svg>
   </div>
 </template>
 
