@@ -14,9 +14,7 @@ describe('transformToGraph', () => {
       { id: 'a', name: 'A', year: 1950, description: '', category: 'concept' },
       { id: 'b', name: 'B', year: 1960, description: '', category: 'algorithm' },
     ]);
-    expect(graph.links).toEqual([
-      { source: 'a', target: 'b' },
-    ]);
+    expect(graph.links).toEqual([{ source: 'a', target: 'b' }]);
   });
 
   it('handles multiple dependencies', () => {

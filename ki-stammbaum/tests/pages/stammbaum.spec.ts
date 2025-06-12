@@ -18,7 +18,8 @@ vi.mock('@/composables/useStammbaumData', () => ({
 }));
 
 const TimelineStub = {
-  template: '<button data-test="bar" @click="$emit(\'yearSelected\', 2001)"></button>',
+  template:
+    '<button data-test="bar" @click="$emit(\'yearSelected\', 2001)"></button>',
 };
 const ConceptDetailStub = {
   props: ['concept'],

@@ -61,9 +61,7 @@ describe('Timeline', () => {
   it('emits yearSelected when a bar is clicked', async () => {
     const wrapper = mount(Timeline, {
       props: {
-        nodes: [
-          { id: 'a', name: 'A', year: 2000 },
-        ],
+        nodes: [{ id: 'a', name: 'A', year: 2000 }],
       },
     });
 
@@ -86,7 +84,7 @@ describe('Timeline', () => {
     expect(initialBars).toBe(2);
 
     // programmatischer Zoom via applyZoom
-    ;(wrapper.vm as any).applyZoom(4);
+    (wrapper.vm as any).applyZoom(4);
     await wrapper.vm.$nextTick();
 
     const zoomedBars = wrapper.findAll('rect').length;

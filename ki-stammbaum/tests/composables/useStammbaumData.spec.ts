@@ -29,7 +29,11 @@ describe('useStammbaumData', () => {
   it('uses dynamic import on fetch error', async () => {
     const importData = { nodes: ['imported'] };
     (globalThis as any).$fetch = vi.fn().mockRejectedValue(new Error('fail'));
-    vi.mock('@/public/data/ki-stammbaum.json', () => ({ default: importData }), { virtual: true });
+    vi.mock(
+      '@/public/data/ki-stammbaum.json',
+      () => ({ default: importData }),
+      { virtual: true },
+    );
 
     const { useStammbaumData } = await import('@/composables/useStammbaumData');
     const { data, error } = useStammbaumData();
@@ -42,7 +46,13 @@ describe('useStammbaumData', () => {
   it('sets error when both fetch and import fail', async () => {
     const fetchErr = new Error('network');
     (globalThis as any).$fetch = vi.fn().mockRejectedValue(fetchErr);
-    vi.mock('@/public/data/ki-stammbaum.json', () => { throw new Error('no file'); }, { virtual: true });
+    vi.mock(
+      '@/public/data/ki-stammbaum.json',
+      () => {
+        throw new Error('no file');
+      },
+      { virtual: true },
+    );
 
     const { useStammbaumData } = await import('@/composables/useStammbaumData');
     const { error, data } = useStammbaumData();

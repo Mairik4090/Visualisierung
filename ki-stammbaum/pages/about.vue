@@ -3,8 +3,8 @@
     <h1>Über dieses Projekt</h1>
     <p>
       Der KI-Stammbaum visualisiert die Entwicklung der künstlichen Intelligenz.
-      Die Daten stammen aus einer kuratierten Sammlung historischer Konzepte
-      und Technologien.
+      Die Daten stammen aus einer kuratierten Sammlung historischer Konzepte und
+      Technologien.
     </p>
     <h2>Credits</h2>
     <p>
@@ -15,11 +15,11 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'default' })
+  definePageMeta({ layout: 'default' });
 </script>
 
 <style scoped>
-.about-page h1 {
-  margin-bottom: 1rem;
-}
+  .about-page h1 {
+    margin-bottom: 1rem;
+  }
 </style>

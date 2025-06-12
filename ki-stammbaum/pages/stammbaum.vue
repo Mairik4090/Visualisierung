@@ -2,14 +2,14 @@
   <div class="stammbaum-page">
     <h1>KI-Stammbaum</h1>
 
-    <FilterControls @filtersApplied="onFilters" />
+    <FilterControls @filters-applied="onFilters" />
     <Legend :categories="legendCategories" />
 
     <Timeline
       v-if="graph.nodes.length"
       :nodes="graph.nodes"
-      @rangeChanged="updateRange"
-      @yearSelected="onYearSelected"
+      @range-changed="updateRange"
+      @year-selected="onYearSelected"
     />
 
     <div v-if="pending">Daten werden geladen...</div>
@@ -18,7 +18,7 @@
       v-else
       :nodes="graph.nodes"
       :links="graph.links"
-      @conceptSelected="selectConcept"
+      @concept-selected="selectConcept"
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
@@ -38,34 +38,41 @@ import Timeline from '@/components/Timeline.vue';
 import { useStammbaumData } from '@/composables/useStammbaumData';
 import { transformToGraph } from '@/utils/graph-transform';
 
+/** Datenabruf */
 const { data, pending, error } = useStammbaumData();
+
+/** Momentan ausgewähltes Konzept */
 const selected = ref(null);
 
-// Speichert den aktuell sichtbaren Zeitbereich aus der Timeline
+/** Aktueller sichtbarer Zeitraum aus der Timeline */
 const timelineRange = ref<[number, number] | null>(null);
 
+/** Legenden-Daten: Kategorien mit Farben aus D3-Scheme */
 const legendCategories = computed(() => {
   if (!data.value) return [];
   const cats = Array.from(new Set(data.value.nodes.map((n: any) => n.category)));
-  const color = d3.scaleOrdinal<string>().domain(cats).range(d3.schemeCategory10);
-  return cats.map((c) => ({ name: c, color: color(c) }));
+  const colorScale = d3.scaleOrdinal<string>()
+    .domain(cats)
+    .range(d3.schemeCategory10);
+  return cats.map((c) => ({ name: c, color: colorScale(c) }));
 });
 
-// Auswahl eines Konzepts im Stammbaum
+/** Auswahl eines Konzepts im Stammbaum */
 function selectConcept(concept: any) {
   selected.value = concept;
 }
 
-// Platzhalter für spätere Filter-Logik
+/** Platzhalter für Filter-Logik */
 function onFilters(filters: any) {
+  // TODO: Filter anwenden
 }
 
-// Empfang des neuen Jahresbereichs von der Timeline
+/** Empfang des neuen Jahresbereichs von der Timeline */
 function updateRange(range: [number, number]) {
   timelineRange.value = range;
 }
 
-// Klick auf einen Balken in der Timeline
+/** Klick auf einen Balken in der Timeline */
 function onYearSelected(year: number) {
   timelineRange.value = [year, year];
   const nodes = filteredNodes.value;
@@ -74,7 +81,7 @@ function onYearSelected(year: number) {
   }
 }
 
-// Filtert die Rohdaten nach dem aktuellen Timeline-Bereich
+/** Gefilterte Knoten basierend auf timelineRange */
 const filteredNodes = computed(() => {
   if (!data.value) return [];
   if (!timelineRange.value) return data.value.nodes;
@@ -82,7 +89,7 @@ const filteredNodes = computed(() => {
   return data.value.nodes.filter((n: any) => n.year >= min && n.year <= max);
 });
 
-// Wandelt die (ggf. gefilterten) Knoten in das Graph-Format um
+/** Graph-Daten (Knoten & Links) für KiStammbaum */
 const graph = computed(() =>
   data.value
     ? transformToGraph(filteredNodes.value)
