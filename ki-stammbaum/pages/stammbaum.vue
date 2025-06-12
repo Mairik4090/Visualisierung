@@ -46,8 +46,8 @@
   /** Momentan ausgewähltes Konzept */
   const selected = ref(null);
 
-  /** Aktueller sichtbarer Zeitraum aus der Timeline */
-  const currentYearRange = ref<[number, number]>([1950, 2025]);
+  /** Aktueller sichtbarer Zeitraum aus der Timeline (als Tuple getypt) */
+  const currentYearRange = ref([1950, 2025] as [number, number]);
 
   /** Legenden-Daten: Kategorien mit Farben aus D3-Scheme */
   const legendCategories = computed(() => {
@@ -79,7 +79,7 @@
 
   /** Klick auf einen Balken in der Timeline */
   function onYearSelected(year: number) {
-    currentYearRange.value = [year - 1, year + 1];
+    currentYearRange.value = [year - 1, year + 1] as [number, number];
   }
 
   const yearFocusWindowSpan = 10;
@@ -88,7 +88,7 @@
   function handleCenterOnYear(year: number) {
     const newMin = Math.round(year - yearFocusWindowSpan / 2);
     const newMax = Math.round(year + yearFocusWindowSpan / 2);
-    currentYearRange.value = [newMin, newMax];
+    currentYearRange.value = [newMin, newMax] as [number, number];
   }
 
   /** Daten für die Timeline (alle Knoten) */
@@ -111,7 +111,7 @@
         const years = newGraphData.nodes.map((n: any) => n.year);
         const minYear = Math.min(...years);
         const maxYear = Math.max(...years);
-        currentYearRange.value = [minYear, maxYear];
+        currentYearRange.value = [minYear, maxYear] as [number, number];
       }
     },
     { immediate: true },
