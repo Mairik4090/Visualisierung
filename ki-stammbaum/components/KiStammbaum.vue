@@ -8,19 +8,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import type { KiConcept } from '@/types/concept';
 
-const props = defineProps({
-  data: {
-    type: Array,
-    required: true,
-  },
-});
+const props = defineProps<{ data: KiConcept[] }>();
 
-const emit = defineEmits(['conceptSelected']);
+const emit = defineEmits<{
+  (e: 'conceptSelected', concept: KiConcept): void;
+}>();
 
-const svg = ref(null);
+const svg = ref<SVGSVGElement | null>(null);
 
 watch(() => props.data, (newData) => {
   if (newData && svg.value) {
@@ -36,22 +34,9 @@ onMounted(() => {
   // }
 });
 
-function handleNodeClick(concept) {
+function handleNodeClick(concept: KiConcept) {
   emit('conceptSelected', concept);
 }
-
-/**
- * @typedef {Object} KiConcept
- * @property {string} id - Eindeutige ID des Konzepts.
- * @property {string} name - Name des KI-Konzepts.
- * @property {number} year - Entstehungsjahr des Konzepts.
- * @property {string[]} dependencies - IDs der Konzepte, von denen dieses Konzept abhängt.
- * @property {string} description - Kurze Beschreibung des Konzepts.
- */
-/**
- * Die KiStammbaum-Komponente ist für die rendering der interaktiven D3.js-Visualisierung des KI-Stammbaums zuständig.
- * Sie empfängt die Daten über die 'data' Prop und aktualisiert die Visualisierung, wenn sich die Daten ändern.
- */
 </script>
 
 <style scoped>

@@ -12,23 +12,11 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps } from 'vue';
+import type { KiConcept } from '@/types/concept';
 
-// Define the structure of a concept, aligning with KiConcept if possible
-interface KiConcept {
-  id: string;
-  name: string;
-  year: number;
-  dependencies?: string[];
-  description: string;
-}
-
-const props = defineProps({
-  concept: {
-    type: Object as () => KiConcept | null,
-    default: null,
-  }
-});
+const props = defineProps<{
+  concept: KiConcept | null;
+}>();
 </script>
 
 <style scoped>
