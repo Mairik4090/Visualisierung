@@ -8,6 +8,7 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ layout: 'default' });
   import { useStammbaumData } from '@/composables/useStammbaumData';
 
   const { data: treeData, pending, error } = useStammbaumData();
