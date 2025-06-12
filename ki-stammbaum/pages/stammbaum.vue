@@ -7,11 +7,12 @@
 
     <div v-if="pending">Daten werden geladen...</div>
     <div v-else-if="error">Fehler beim Laden: {{ error.message }}</div>
-    <KiStammbaum
-      v-else
-      :data="graphData"
-      @conceptSelected="selectConcept"
-    />
+  <KiStammbaum
+    v-else
+    :nodes="graph.nodes"
+    :links="graph.links"
+    @conceptSelected="selectConcept"
+  />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
   </div>
@@ -25,6 +26,7 @@ import FilterControls from '@/components/FilterControls.vue';
 import ConceptDetail from '@/components/ConceptDetail.vue';
 import Legend from '@/components/Legend.vue';
 import { useStammbaumData } from '@/composables/useStammbaumData';
+import { transformToGraph } from '@/utils/graph-transform';
 
 const { data, pending, error } = useStammbaumData();
 const selected = ref(null);
@@ -43,7 +45,9 @@ function onFilters(filters: any) {
   console.log('angewandte Filter', filters);
 }
 
-const graphData = computed(() => data.value?.nodes || []);
+const graph = computed(() =>
+  data.value ? transformToGraph(data.value.nodes) : { nodes: [], links: [] },
+);
 </script>
 
 <style scoped>

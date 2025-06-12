@@ -1,11 +1,13 @@
 # KiStammbaum.vue
 
-Diese Komponente bildet die zentrale Visualisierung des KI-Stammbaums. Sie lädt die Daten 
-über `useStammbaumData()` und übergibt sie an D3, um ein interaktives SVG zu rendern.
+Diese Komponente bildet die zentrale Visualisierung des KI-Stammbaums. Die bereits
+transformierten Graph-Daten werden per Props übergeben und dienen als Grundlage für die
+D3-Visualisierung.
 
 ## Props
 
-- *keine* – die Daten stammen aus dem Composable.
+- `nodes` – Array der Knoten für die Darstellung
+- `links` – Array der Kanten zwischen den Knoten
 
 ## Emits
 
