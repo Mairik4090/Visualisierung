@@ -8,7 +8,7 @@
     <Timeline
       v-if="allGraphDataForTimeline.nodes.length"
       :nodes="allGraphDataForTimeline.nodes"
-      @range-changed="updateCurrentYearRange"
+      @range-change-end="updateCurrentYearRange"
       @year-selected="onYearSelected"
       @node-clicked-in-timeline="handleNodeClickedInTimeline"
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
@@ -112,10 +112,8 @@
 
   /** Handler for node click events from Timeline.vue */
   function handleNodeClickedInTimeline(node: Node) {
-    selected.value = node;
-    // Optional: Adjust currentYearRange or trigger other focus effects
-    // For example, center the main graph view on this year if desired
-    // handleCenterOnYear(node.year);
+  // selected.value = node; // This line should be removed or commented out
+  handleCenterOnYear(node.year); // This line should be uncommented or added
   }
 
   /** Handler for node hover events from Timeline.vue */
