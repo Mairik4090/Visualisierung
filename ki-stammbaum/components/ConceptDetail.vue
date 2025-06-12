@@ -1,18 +1,18 @@
 <template>
-  <div v-if="concept" class="concept-detail-container">
-    <h2>Konzeptdetails</h2>
-    <p><strong>Name:</strong> {{ concept.name }}</p>
-    <p><strong>Jahr:</strong> {{ concept.year }}</p>
-    <p><strong>Beschreibung:</strong> {{ concept.description }}</p>
-    <!-- Weitere Details hier -->
-  </div>
-  <div v-else class="concept-detail-placeholder">
-    <p>Wählen Sie ein Konzept aus, um Details anzuzeigen.</p>
-  </div>
+  <BaseModal :open="!!concept" @close="close">
+    <div v-if="concept" class="concept-detail-container">
+      <h2>Konzeptdetails</h2>
+      <p><strong>Name:</strong> {{ concept.name }}</p>
+      <p><strong>Jahr:</strong> {{ concept.year }}</p>
+      <p><strong>Beschreibung:</strong> {{ concept.description }}</p>
+      <button class="close-button" type="button" @click="close">Schließen</button>
+    </div>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { defineProps } from 'vue';
+import { defineProps, defineEmits } from 'vue';
+import BaseModal from './ui/BaseModal.vue';
 
 // Define the structure of a concept, aligning with KiConcept if possible
 interface KiConcept {
@@ -27,8 +27,14 @@ const props = defineProps({
   concept: {
     type: Object as () => KiConcept | null,
     default: null,
-  }
+  },
 });
+
+const emit = defineEmits(['close']);
+
+function close() {
+  emit('close');
+}
 </script>
 
 <style scoped>
@@ -49,12 +55,4 @@ const props = defineProps({
   margin-bottom: 0.5rem;
 }
 
-.concept-detail-placeholder {
-  padding: 1rem;
-  margin-top: 1rem;
-  text-align: center;
-  color: #888;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
-}
 </style>
