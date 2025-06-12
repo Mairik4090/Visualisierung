@@ -11,8 +11,8 @@
 </template>
 
 <script setup lang="ts">
-// Import des zentralen KiConcept-Typs aus der Typdefinitionsdatei
-import type { KiConcept } from '@/types/concept';
+// Import des zentralen Concept-Typs aus der Typdefinitionsdatei
+import type { Concept } from '@/types/concept';
 // Import der BaseModal-Komponente für die modale Darstellung
 import BaseModal from './ui/BaseModal.vue';
 
@@ -21,7 +21,7 @@ import BaseModal from './ui/BaseModal.vue';
  * concept: Das anzuzeigende KI-Konzept oder null wenn kein Konzept ausgewählt ist
  */
 const props = defineProps<{
-  concept: KiConcept | null;
+  concept: Concept | null;
 }>();
 
 /**

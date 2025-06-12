@@ -3,15 +3,18 @@
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg ref="svg" class="ki-stammbaum-svg" aria-label="KI-Stammbaum Visualisierung" role="img">
       <title>KI-Stammbaum Visualisierung</title>
+      <text v-if="pending" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle">Visualisierung lädt...</text>
     </svg>
   </div>
 </template>
 
 <script setup lang="ts">
 // Vue Composition API Imports für Lifecycle und Reaktivität
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch, computed } from 'vue';
 // Import des zentralen KiConcept-Typs und Graph-Types aus der Typdefinitionsdatei
 import type { KiConcept, Node, Link } from '@/types/concept';
+// Import des Composables zum Laden der Stammbaum-Daten
+import { useStammbaumData } from '@/composables/useStammbaumData';
 
 /**
  * Event-Emitter für Kommunikation mit der Parent-Komponente
@@ -21,29 +24,72 @@ const emit = defineEmits<{
   conceptSelected: [concept: KiConcept];
 }>();
 
-// Props für die bereits transformierten Graph-Daten
-const props = defineProps<{
-  nodes: Node[];
-  links: Link[];
-}>();
-
 // Referenz auf das SVG-Element für D3.js-Manipulationen
 const svg = ref<SVGSVGElement | null>(null);
 
+// Laden der Stammbaum-Daten über das Composable
+const { data, pending, error } = useStammbaumData();
+
 /**
- * Watcher für Datenänderungen
- * Wird ausgelöst sobald neue Daten verfügbar sind und initiiert die D3-Visualisierung
+ * Computed Property zur Transformation der rohen Daten in Graph-Strukturen
+ * Konvertiert die KiConcept-Daten in Nodes und Links für D3.js
+ */
+const graphData = computed(() => {
+  if (!data.value?.nodes) return { nodes: [], links: [] };
+  
+  const concepts = data.value.nodes as KiConcept[];
+  
+  // Transformation zu Graph-Knoten
+  const nodes: Node[] = concepts.map(concept => ({
+    id: concept.id,
+    name: concept.name,
+    year: concept.year,
+    description: concept.description,
+    // Weitere D3-spezifische Eigenschaften können hier hinzugefügt werden
+    x: 0,
+    y: 0
+  }));
+  
+  // Transformation zu Graph-Verbindungen basierend auf Dependencies
+  const links: Link[] = [];
+  concepts.forEach(concept => {
+    if (concept.dependencies) {
+      concept.dependencies.forEach(depId => {
+        links.push({
+          source: depId,
+          target: concept.id
+        });
+      });
+    }
+  });
+  
+  return { nodes, links };
+});
+
+/**
+ * Watcher für Datenänderungen der Graph-Struktur
+ * Wird ausgelöst sobald neue transformierte Daten verfügbar sind und initiiert die D3-Visualisierung
  */
 watch(
-  () => props.nodes,
-  (newNodes) => {
-    if (newNodes && svg.value) {
-      console.log('Graph aktualisiert:', newNodes.length, 'Knoten');
-      // renderD3Visualization({ nodes: newNodes, links: props.links });
+  graphData,
+  (newGraphData) => {
+    if (newGraphData.nodes.length > 0 && svg.value) {
+      console.log('Graph aktualisiert:', newGraphData.nodes.length, 'Knoten,', newGraphData.links.length, 'Verbindungen');
+      // renderD3Visualization(newGraphData); // Später implementieren
     }
   },
-  { immediate: true },
+  { immediate: true }
 );
+
+/**
+ * Watcher für Fehlerbehandlung
+ * Loggt Fehler beim Laden der Daten
+ */
+watch(error, (newError) => {
+  if (newError) {
+    console.error('Fehler beim Laden der Stammbaum-Daten:', newError);
+  }
+});
 
 /**
  * Lifecycle Hook - wird nach dem Mounten der Komponente ausgeführt
@@ -61,6 +107,24 @@ onMounted(() => {
  */
 function handleNodeClick(concept: KiConcept): void {
   emit('conceptSelected', concept);
+}
+
+/**
+ * Hilfsfunktion zur Transformation einzelner Konzepte zu Graph-Knoten
+ * Kann für spezielle D3-Anpassungen erweitert werden
+ * 
+ * @param concept - Das zu transformierende KI-Konzept
+ * @returns Graph-Knoten für D3.js
+ */
+function conceptToNode(concept: KiConcept): Node {
+  return {
+    id: concept.id,
+    name: concept.name,
+    year: concept.year,
+    description: concept.description,
+    x: 0,
+    y: 0
+  };
 }
 </script>
 
