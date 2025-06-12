@@ -9,14 +9,31 @@
 </template>
 
 <script setup lang="ts">
+// Vue Composition API Imports für Lifecycle und Reaktivität
 import { onMounted, ref, watch } from 'vue';
+// Import des zentralen KiConcept-Typs aus der Typdefinitionsdatei
+import type { KiConcept } from '@/types/concept';
+// Import des Composables zum Laden der Stammbaum-Daten
 import { useStammbaumData } from '@/composables/useStammbaumData';
 
-const emit = defineEmits(['conceptSelected']);
+/**
+ * Event-Emitter für Kommunikation mit der Parent-Komponente
+ * conceptSelected: Wird ausgelöst wenn ein Knoten im Stammbaum angeklickt wird
+ */
+const emit = defineEmits<{
+  conceptSelected: [concept: KiConcept];
+}>();
 
+// Referenz auf das SVG-Element für D3.js-Manipulationen
 const svg = ref<SVGSVGElement | null>(null);
+
+// Laden der Stammbaum-Daten über das Composable
 const { data, pending } = useStammbaumData();
 
+/**
+ * Watcher für Datenänderungen
+ * Wird ausgelöst sobald neue Daten verfügbar sind und initiiert die D3-Visualisierung
+ */
 watch(data, (newData) => {
   if (newData && svg.value) {
     console.log('Daten für D3 aktualisiert:', (newData as any).length, 'Konzepte');
@@ -24,43 +41,40 @@ watch(data, (newData) => {
   }
 }, { immediate: true });
 
+/**
+ * Lifecycle Hook - wird nach dem Mounten der Komponente ausgeführt
+ * Loggt das SVG-Element für Debugging-Zwecke
+ */
 onMounted(() => {
   console.log('KiStammbaum Komponente mounted. SVG-Element:', svg.value);
 });
 
-function handleNodeClick(concept) {
+/**
+ * Event-Handler für Klicks auf Knoten in der Visualisierung
+ * Emittiert das conceptSelected-Event mit dem angeklickten Konzept
+ * 
+ * @param concept - Das angeklickte KI-Konzept
+ */
+function handleNodeClick(concept: KiConcept): void {
   emit('conceptSelected', concept);
 }
-
-/**
- * @typedef {Object} KiConcept
- * @property {string} id - Eindeutige ID des Konzepts.
- * @property {string} name - Name des KI-Konzepts.
- * @property {number} year - Entstehungsjahr des Konzepts.
- * @property {string[]} dependencies - IDs der Konzepte, von denen dieses Konzept abhängt.
- * @property {string} description - Kurze Beschreibung des Konzepts.
- */
-/**
- * Die KiStammbaum-Komponente ist für die Rendering der interaktiven
- * D3.js-Visualisierung des KI-Stammbaums zuständig. Die benötigten Daten
- * werden über das `useStammbaumData`-Composable geladen und bei Änderungen
- * erneut an D3 übergeben.
- */
 </script>
 
 <style scoped>
+/* Hauptcontainer für die Stammbaum-Visualisierung */
 .ki-stammbaum-container {
   width: 100%;
-  height: 80vh; /* Beispielhöhe */
+  height: 80vh; /* Beispielhöhe - anpassbar je nach Layout-Anforderungen */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 
+/* SVG-Element für die D3.js-Visualisierung */
 .ki-stammbaum-svg {
   width: 100%;
   height: 100%;
-  border: 1px solid #ccc; /* Visueller Platzhalter */
+  border: 1px solid #ccc; /* Visueller Platzhalter während der Entwicklung */
 }
 </style>

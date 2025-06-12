@@ -11,33 +11,38 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
+// Import des zentralen KiConcept-Typs aus der Typdefinitionsdatei
+import type { KiConcept } from '@/types/concept';
+// Import der BaseModal-Komponente für die modale Darstellung
 import BaseModal from './ui/BaseModal.vue';
 
-// Define the structure of a concept, aligning with KiConcept if possible
-interface KiConcept {
-  id: string;
-  name: string;
-  year: number;
-  dependencies?: string[];
-  description: string;
-}
+/**
+ * Props-Definition für die Komponente
+ * concept: Das anzuzeigende KI-Konzept oder null wenn kein Konzept ausgewählt ist
+ */
+const props = defineProps<{
+  concept: KiConcept | null;
+}>();
 
-const props = defineProps({
-  concept: {
-    type: Object as () => KiConcept | null,
-    default: null,
-  },
-});
+/**
+ * Event-Emitter für Kommunikation mit der Parent-Komponente
+ * close: Event wird ausgelöst wenn das Modal geschlossen werden soll
+ */
+const emit = defineEmits<{
+  close: [];
+}>();
 
-const emit = defineEmits(['close']);
-
-function close() {
+/**
+ * Schließt das Modal durch Emission des close-Events
+ * Wird sowohl vom Schließen-Button als auch vom BaseModal selbst aufgerufen
+ */
+function close(): void {
   emit('close');
 }
 </script>
 
 <style scoped>
+/* Container für den Hauptinhalt des Konzeptdetails-Modals */
 .concept-detail-container {
   border: 1px solid #eee;
   padding: 1rem;
@@ -46,13 +51,14 @@ function close() {
   border-radius: 8px;
 }
 
+/* Styling für die Überschrift - Abstand oben entfernen */
 .concept-detail-container h2 {
   margin-top: 0;
   color: #333;
 }
 
+/* Spacing zwischen den Informationsparagraphen */
 .concept-detail-container p {
   margin-bottom: 0.5rem;
 }
-
 </style>

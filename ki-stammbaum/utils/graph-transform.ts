@@ -1,3 +1,4 @@
+
 /**
  * Utility functions for transforming the KI-Stammbaum dataset into
  * a D3-compatible format.
@@ -18,6 +19,7 @@ export function transformToGraph(concepts: Concept[]): Graph {
   // 2 Links erstellen – Abhängigkeiten bilden gerichtete Kanten
   const links: Link[] = concepts.flatMap((c) =>
     (c.dependencies ?? []).map((dep) => ({ source: dep, target: c.id })),
+ main
   );
   return { nodes, links };
 }
