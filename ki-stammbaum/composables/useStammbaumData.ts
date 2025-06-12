@@ -40,8 +40,14 @@ async function loadData(): Promise<void> {
     const result = await $fetch<StammbaumData>('/data/ki-stammbaum.json');
     dataCache.value = result;
   } catch (err) {
-    // Fehler erfassen und in typisierter Form speichern
-    errorCache.value = err as Error;
+    try {
+      // Fallback auf statischen Import, falls kein Netzwerkzugriff möglich ist
+      const localModule = await import('@/public/data/ki-stammbaum.json');
+      dataCache.value = (localModule.default || localModule) as StammbaumData;
+    } catch {
+      // Fehler erfassen und in typisierter Form speichern
+      errorCache.value = err as Error;
+    }
   } finally {
     // Ladezustand in jedem Fall zurücksetzen
     pendingCache.value = false;
