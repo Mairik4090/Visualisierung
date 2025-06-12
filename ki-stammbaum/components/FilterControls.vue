@@ -3,7 +3,7 @@
     <h3>Filter und Sortierung</h3>
     <div>
       <label for="year-filter">Jahr:</label>
-      <input type="number" id="year-filter" v-model="yearFilter" />
+      <input type="number" id="year-filter" v-model="yearFilter" placeholder="z.B. 1950" />
     </div>
     <div>
       <label for="type-filter">Typ:</label>
