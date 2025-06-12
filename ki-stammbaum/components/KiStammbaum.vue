@@ -17,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, withDefaults } from 'vue';
 import * as d3 from 'd3';
 import type { Node, Link } from '@/types/concept';
 
@@ -30,10 +30,16 @@ interface GraphNode extends Node {
  * Eingehende Daten für die Darstellung des KI-Stammbaums.
  * Beide Properties sind optional, um flexibel mit verschiedenen Datenquellen zu arbeiten.
  */
-const props = defineProps<{
-  nodes?: GraphNode[];
-  links?: Link[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    nodes?: GraphNode[];
+    links?: Link[];
+    usePhysics?: boolean;
+  }>(),
+  {
+    usePhysics: true,
+  },
+);
 
 /**
  * Event-Emitter für Kommunikation mit der Parent-Komponente.
@@ -133,17 +139,31 @@ function render(): void {
       .on('end', dragEnded),
   );
 
-  // Simulation mit Kräften initialisieren
-  simulation = d3
-    .forceSimulation(props.nodes)
-    .force(
-      'link',
-      d3.forceLink(props.links ?? []).id((d: any) => d.id).distance(60),
-    )
-    .force('charge', d3.forceManyBody().strength(-120))
-    .force('x', d3.forceX((d: any) => xScale(d.year)))
-    .force('y', d3.forceY(height / 2).strength(0.05))
-    .on('tick', ticked);
+  if (props.usePhysics) {
+    // Simulation mit Kräften initialisieren
+    simulation = d3
+      .forceSimulation(props.nodes)
+      .force(
+        'link',
+        d3.forceLink(props.links ?? []).id((d: any) => d.id).distance(60),
+      )
+      .force('charge', d3.forceManyBody().strength(-120))
+      .force('x', d3.forceX((d: any) => xScale(d.year)))
+      .force('y', d3.forceY(height / 2).strength(0.05))
+      .on('tick', ticked);
+  } else {
+    node
+      .attr('cx', (d: any) => xScale(d.year))
+      .attr('cy', height / 2);
+    labels
+      .attr('x', (d: any) => xScale(d.year))
+      .attr('y', height / 2 - 12);
+    link
+      .attr('x1', (d: any) => xScale((d.source as GraphNode).year))
+      .attr('y1', height / 2)
+      .attr('x2', (d: any) => xScale((d.target as GraphNode).year))
+      .attr('y2', height / 2);
+  }
 
   function ticked() {
     link
@@ -175,6 +195,7 @@ function render(): void {
 }
 
 // Komponente nach dem Mounting rendern
+
 onMounted(render);
 
 // Simulation beim Unmount stoppen, um Speicherlecks zu vermeiden
@@ -185,6 +206,14 @@ watch(
   () => [props.nodes, props.links],
   render,
   { deep: true }, // Tiefe Überwachung für verschachtelte Objekte
+);
+
+watch(
+  () => props.usePhysics,
+  () => {
+    if (!props.usePhysics) simulation?.stop();
+    render();
+  },
 );
 </script>
 

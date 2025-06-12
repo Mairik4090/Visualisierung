@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import KiStammbaum from '@/components/KiStammbaum.vue';
+import * as d3 from 'd3';
 
 describe('KiStammbaum', () => {
   it('renders heading and svg element', () => {
@@ -30,5 +31,20 @@ describe('KiStammbaum', () => {
     const labelTexts = labels.map((t) => t.text()).filter((t) => t !== 'Visualisierung lädt...');
     expect(labelTexts).toContain('Node A');
     expect(labelTexts).toContain('Node B');
+  });
+
+  it('does not create a force simulation when usePhysics is false', () => {
+    const spy = vi.spyOn(d3, 'forceSimulation');
+    mount(KiStammbaum, {
+      props: {
+        nodes: [
+          { id: 'a', name: 'A', year: 1950 },
+          { id: 'b', name: 'B', year: 1960 },
+        ],
+        links: [],
+        usePhysics: false,
+      },
+    });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

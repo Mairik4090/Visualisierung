@@ -5,6 +5,7 @@
       <p><strong>Name:</strong> {{ concept.name }}</p>
       <p><strong>Jahr:</strong> {{ concept.year }}</p>
       <p><strong>Beschreibung:</strong> {{ concept.description }}</p>
+      <NodeTimeline :concept="concept" />
       <button class="close-button" type="button" @click="close">Schließen</button>
     </div>
   </BaseModal>
@@ -15,6 +16,7 @@
 import type { Concept } from '@/types/concept';
 // Import der BaseModal-Komponente für die modale Darstellung
 import BaseModal from './ui/BaseModal.vue';
+import NodeTimeline from './NodeTimeline.vue';
 
 /**
  * Props-Definition für die Komponente
