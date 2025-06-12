@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, watch, ref, nextTick, defineExpose } from 'vue';
+  import { onMounted, watch, ref, nextTick, defineExpose, type PropType } from 'vue';
   import * as d3 from 'd3';
   import type { Node } from '@/types/concept';
 
@@ -19,7 +19,10 @@
    *  - 'rangeChanged' mit [minJahr, maxJahr]
    *  - 'yearSelected' mit dem ausgewählten Jahr
    */
-  const props = defineProps<{ nodes: Node[] }>();
+  const props = defineProps({
+    nodes: { type: Array as PropType<Node[]>, required: true },
+    highlightNodeId: { type: String as PropType<string | null>, default: null }
+  });
   const emit = defineEmits<{
     (e: 'rangeChanged', range: [number, number]): void;
     (e: 'nodeClickedInTimeline', node: Node): void;
@@ -57,8 +60,10 @@
       .join('circle')
       .attr('cx', (d: Node) => zx(d.year))
       .attr('cy', y(0)) // Simple vertical centering for now (y(0) will be middle)
-      .attr('r', 4) // Fixed radius
+      .attr('r', (d: Node) => d.id === props.highlightNodeId ? 6 : 4) // Adjust radius
       .attr('fill', (d: Node) => color(d.category))
+      .attr('stroke', (d: Node) => d.id === props.highlightNodeId ? 'black' : 'none') // Add stroke
+      .attr('stroke-width', (d: Node) => d.id === props.highlightNodeId ? 2 : 0) // Add stroke width
       .style('cursor', 'pointer')
       .on('click', (event: MouseEvent, d: Node) => {
         emit('nodeClickedInTimeline', d);
