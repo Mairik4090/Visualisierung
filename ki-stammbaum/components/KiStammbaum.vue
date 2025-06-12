@@ -1,5 +1,5 @@
 <template>
-  <div class="ki-stammbaum-container">
+  <div class="ki-stammbaum-container" ref="container">
     <h2>KI-Stammbaum Visualisierung</h2>
     <svg
       ref="svg"
@@ -55,14 +55,17 @@
     conceptSelected: [node: GraphNode];
   }>();
 
-  /**
-   * SVG-Referenz für alle D3-Manipulationen
-   * Wird verwendet, um das DOM-Element direkt mit D3.js zu steuern
-   */
-  const svg = ref<SVGSVGElement | null>(null);
+/** 
+ * SVG-Referenz für alle D3-Manipulationen 
+ * Wird verwendet, um das DOM-Element direkt mit D3.js zu steuern
+ */
+const svg = ref<SVGSVGElement | null>(null);
+const container = ref<HTMLElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
-  /** Aktuelle D3-Simulation zur späteren Bereinigung */
-  let simulation: d3.Simulation<GraphNode, undefined> | null = null;
+/** Aktuelle D3-Simulation zur späteren Bereinigung */
+let simulation: d3.Simulation<GraphNode, undefined> | null = null;
+let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
   /**
    * Render-Funktion erzeugt die Visualisierung des Stammbaums.
@@ -100,8 +103,18 @@
     // Farbskala
     const color = d3.scaleOrdinal(d3.schemeCategory10);
 
-    // Hauptgruppe für alle grafischen Elemente
-    const g = svgSel.append('g');
+  // Hauptgruppe für alle grafischen Elemente
+  const g = svgSel.append('g');
+
+  // Zoom- und Pan-Interaktion auf das gesamte SVG anwenden
+  zoomBehavior = d3
+    .zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.5, 5])
+    .on('zoom', (ev) => {
+      const { x, k } = ev.transform;
+      g.attr('transform', `translate(${x},0) scale(${k})`);
+    });
+  svgSel.call(zoomBehavior as any);
 
     // Linien für die Links erstellen
     const link = g
@@ -184,36 +197,40 @@
       labels.attr('x', (d: any) => d.x).attr('y', (d: any) => (d.y ?? 0) - 12);
     }
 
-    function dragStarted(
-      event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
-    ) {
-      if (!event.active) simulation?.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
-    }
-
-    function dragged(
-      event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
-    ) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
-    }
-
-    function dragEnded(
-      event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
-    ) {
-      if (!event.active) simulation?.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
-    }
+  function dragStarted(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    event.sourceEvent?.stopPropagation();
+    if (!event.active) simulation?.alphaTarget(0.3).restart();
+    event.subject.fx = event.subject.x;
+    event.subject.fy = event.subject.y;
   }
+
+  function dragged(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    event.sourceEvent?.stopPropagation();
+    event.subject.fx = event.x;
+    event.subject.fy = event.y;
+  }
+
+  function dragEnded(event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>) {
+    event.sourceEvent?.stopPropagation();
+    if (!event.active) simulation?.alphaTarget(0);
+    event.subject.fx = null;
+    event.subject.fy = null;
+  }
+}
 
   // Komponente nach dem Mounting rendern
 
-  onMounted(render);
+onMounted(() => {
+  render();
+  resizeObserver = new ResizeObserver(() => render());
+  if (container.value) resizeObserver.observe(container.value);
+});
 
-  // Simulation beim Unmount stoppen, um Speicherlecks zu vermeiden
-  onBeforeUnmount(() => simulation?.stop());
+// Simulation und ResizeObserver beim Unmount stoppen, um Speicherlecks zu vermeiden
+onBeforeUnmount(() => {
+  simulation?.stop();
+  resizeObserver?.disconnect();
+});
 
   // Bei Änderungen der Props neu rendern
   watch(
@@ -251,14 +268,15 @@
     font-size: 1.5rem;
   }
 
-  /* SVG-Element für die D3.js-Visualisierung */
-  .ki-stammbaum-svg {
-    width: 100%;
-    height: 100%;
-    border: 1px solid #ccc; /* Visueller Platzhalter während der Entwicklung */
-    border-radius: 4px;
-    background-color: #fafafa; /* Leichter Hintergrund für bessere Sichtbarkeit */
-  }
+/* SVG-Element für die D3.js-Visualisierung */
+.ki-stammbaum-svg {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #ccc; /* Visueller Platzhalter während der Entwicklung */
+  border-radius: 4px;
+  background-color: #fafafa; /* Leichter Hintergrund für bessere Sichtbarkeit */
+  cursor: grab;
+}
 
   /* Styling für Ladetext */
   .ki-stammbaum-svg text {
