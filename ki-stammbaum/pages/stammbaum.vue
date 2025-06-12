@@ -4,6 +4,7 @@
 
     <FilterControls @filtersApplied="onFilters" />
     <Legend :categories="legendCategories" />
+    <Timeline v-if="graph.nodes.length" :nodes="graph.nodes" />
 
     <div v-if="pending">Daten werden geladen...</div>
     <div v-else-if="error">Fehler beim Laden: {{ error.message }}</div>
@@ -25,6 +26,7 @@ import KiStammbaum from '@/components/KiStammbaum.vue';
 import FilterControls from '@/components/FilterControls.vue';
 import ConceptDetail from '@/components/ConceptDetail.vue';
 import Legend from '@/components/Legend.vue';
+import Timeline from '@/components/Timeline.vue';
 import { useStammbaumData } from '@/composables/useStammbaumData';
 import { transformToGraph } from '@/utils/graph-transform';
 

@@ -1,0 +1,5 @@
+# Timeline.vue
+
+Visualisiert einen Zeitstrahl von ersten bis letzten Jahr der Daten.
+Balken zeigen an, wie viele Konzepte in einem Jahr existieren. Durch Ziehen
+und Scrollen kann entlang der x-Achse gezoomt und navigiert werden.
