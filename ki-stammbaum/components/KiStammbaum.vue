@@ -489,21 +489,19 @@
 
     // Initialize D3 zoom behavior if it hasn't been already.
     // This is done once and reused across re-renders.
+    let originalZoomHandler: ((event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => void) | null = null;
     if (!zoomBehavior) {
+      originalZoomHandler = (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        if (g) { // Ensure g is initialized
+          g.attr('transform', event.transform.toString());
+        }
+        lastTransform = event.transform; // Store the latest transform state
+        debouncedProcessZoom();
+      };
       zoomBehavior = d3
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.5, 5]) // Min/max zoom levels.
-        .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
-          // Apply the transform immediately for responsiveness
-          if (g) {
-            // Ensure g is initialized
-            g.attr('transform', event.transform.toString());
-          }
-          lastTransform = event.transform; // Store the latest transform state
-
-          // Debounce the more expensive operations
-          debouncedProcessZoom();
-        });
+        .on('zoom', originalZoomHandler);
     }
 
     // Attach the zoom behavior to the SVG element.
@@ -512,10 +510,21 @@
     // Restore the last known zoom/pan transform.
     // This is important for maintaining the view state across re-renders (e.g., data updates).
     if (lastTransform && zoomBehavior) {
+      // Store the original zoom handler if it wasn't stored during initialization
+      if (!originalZoomHandler) {
+        originalZoomHandler = zoomBehavior.on('zoom');
+      }
+      // Temporarily disable the zoom handler
+      zoomBehavior.on('zoom', null);
+      // Apply the transform
       (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(
         svgSel as any, // Apply to the SVG selection
         lastTransform, // Using the stored transform
       );
+      // Restore the original zoom handler
+      if (originalZoomHandler) {
+        zoomBehavior.on('zoom', originalZoomHandler);
+      }
     }
 
     // --- LINK RE-MAPPING ---
