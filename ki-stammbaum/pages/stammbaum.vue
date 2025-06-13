@@ -39,6 +39,7 @@
       @center-on-year="handleCenterOnYear"
       @node-hovered="handleNodeHoveredInTree"
       :highlight-node-id="overallHoveredNodeId"
+      :selected-node-id="selected?.id" <!-- Pass the ID of the selected concept for highlighting in KiStammbaum -->
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
@@ -63,7 +64,19 @@
   const { data, pending, error } = useStammbaumData();
 
   /** Momentan ausgewähltes Konzept */
-  const selected = ref<Node | null>(null); // Added type for selected
+  const selected = ref<Node | null>(null); // Holds the currently selected concept node, or null if no node is selected.
+
+  /**
+   * Stores the currently applied filter values from FilterControls.vue.
+   * - `startYear`: Filters nodes to be on or after this year. Null means no start year filter.
+   * - `endYear`: Filters nodes to be on or before this year. Null means no end year filter.
+   * - `type`: Filters nodes by category (e.g., 'algorithm', 'concept'). Empty string means all types.
+   */
+  const activeFilters = ref<{
+    startYear: number | null;
+    endYear: number | null;
+    type: string;
+  }>({ startYear: null, endYear: null, type: '' });
 
   /** Aktueller sichtbarer Zeitraum aus der Timeline (als Tuple getypt) */
   const currentYearRange = ref([1950, 2025] as [number, number]);
@@ -90,12 +103,20 @@
 
   /** Auswahl eines Konzepts im Stammbaum */
   function selectConcept(concept: Node | any) { // Can be Node from KiStammbaum or any for now
-    selected.value = concept as Node; // Assuming it's a Node
+    selected.value = concept as Node; // Cast to Node, assuming the emitted object is a valid Node.
   }
 
-  /** Platzhalter für Filter-Logik */
-  function onFilters(filters: any) {
-    // TODO: Filter anwenden
+  /**
+   * Callback function triggered when filters are applied in FilterControls.vue.
+   * Updates the `activeFilters` ref with the new filter values.
+   * @param filters - An object containing `startYear`, `endYear`, and `type` filter values.
+   */
+  function onFilters(filters: {
+    startYear: number | null;
+    endYear: number | null;
+    type: string;
+  }) {
+    activeFilters.value = filters; // Update the reactive ref, triggering re-computation of stammbaumGraph.
   }
 
   /** Empfang des neuen Jahresbereichs von der Timeline */
@@ -112,8 +133,9 @@
 
   /** Handler for node click events from Timeline.vue */
   function handleNodeClickedInTimeline(node: Node) {
-  // selected.value = node; // This line should be removed or commented out
-  handleCenterOnYear(node.year); // This line should be uncommented or added
+    // When a node is clicked in the timeline, center the main graph view on that node's year.
+    // We don't select the node here as primary selection happens in the graph itself.
+    handleCenterOnYear(node.year);
   }
 
   /** Handler for node hover events from Timeline.vue */
@@ -151,10 +173,39 @@
     return transformToGraph(data.value.nodes);
   });
 
-  /** Daten für KiStammbaum */
+  /**
+   * Computed property that prepares the graph data (nodes and links) for KiStammbaum.
+   * It first filters the raw data based on `activeFilters` and then transforms it
+   * into a graph structure suitable for D3 rendering.
+   */
   const stammbaumGraph = computed(() => {
-    if (!data.value) return { nodes: [], links: [] };
-    return transformToGraph(data.value.nodes);
+    if (!data.value) return { nodes: [], links: [] }; // Return empty graph if no data.
+
+    let nodesToProcess = data.value.nodes;
+
+    // Apply start year filter, if set.
+    if (activeFilters.value.startYear !== null) {
+      nodesToProcess = nodesToProcess.filter(
+        (node: Node) => node.year >= activeFilters.value.startYear!,
+      );
+    }
+    // Apply end year filter, if set.
+    if (activeFilters.value.endYear !== null) {
+      nodesToProcess = nodesToProcess.filter(
+        (node: Node) => node.year <= activeFilters.value.endYear!,
+      );
+    }
+
+    // Apply type (category) filter, if a type is selected.
+    if (activeFilters.value.type && activeFilters.value.type !== '') {
+      nodesToProcess = nodesToProcess.filter(
+        (node: Node) => node.category === activeFilters.value.type,
+      );
+    }
+
+    // Transform the (potentially filtered) list of nodes into a graph structure.
+    // transformToGraph also generates the corresponding links based on dependencies.
+    return transformToGraph(nodesToProcess);
   });
 
   /** Initiales Setzen des Zeitbereichs basierend auf den Daten */
