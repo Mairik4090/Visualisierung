@@ -24,7 +24,9 @@
         top: hoverPreviewPosition.y + 'px',
       }"
     >
-      <div><strong>{{ hoveredNodeInTimeline.name }}</strong></div>
+      <div>
+        <strong>{{ hoveredNodeInTimeline.name }}</strong>
+      </div>
       <div>Year: {{ hoveredNodeInTimeline.year }}</div>
       <div>Category: {{ hoveredNodeInTimeline.category }}</div>
     </div>
@@ -40,7 +42,7 @@
       @center-on-year="handleCenterOnYear"
       @node-hovered="handleNodeHoveredInTree"
       :highlight-node-id="overallHoveredNodeId"
-      :selected-node-id="selected?.id" <!-- Pass the ID of the selected concept for highlighting in KiStammbaum -->
+      :selected-node-id="selected?.id"
       @main-view-range-changed="handleMainViewRangeChange"
     />
 
@@ -105,7 +107,8 @@
   });
 
   /** Auswahl eines Konzepts im Stammbaum */
-  function selectConcept(concept: Node | any) { // Can be Node from KiStammbaum or any for now
+  function selectConcept(concept: Node | any) {
+    // Can be Node from KiStammbaum or any for now
     selected.value = concept as Node; // Cast to Node, assuming the emitted object is a valid Node.
   }
 
@@ -148,7 +151,10 @@
     if (payload) {
       hoveredNodeInTimeline.value = payload.node; // For existing tooltip
       overallHoveredNodeId.value = payload.node.id; // Update shared hover ID
-      hoverPreviewPosition.value = { x: payload.event.clientX + 10, y: payload.event.clientY + 10 };
+      hoverPreviewPosition.value = {
+        x: payload.event.clientX + 10,
+        y: payload.event.clientY + 10,
+      };
     } else {
       hoveredNodeInTimeline.value = null;
       overallHoveredNodeId.value = null; // Clear shared hover ID
@@ -247,7 +253,7 @@
     font-size: 0.85rem;
     z-index: 1000; /* Ensure it's above other elements */
     pointer-events: none; /* Prevent tooltip from capturing mouse events */
-    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
     white-space: nowrap; /* Prevent long names from wrapping awkwardly */
     /* Transitions for smoother appearance/disappearance (optional) */
     /* transition: opacity 0.1s ease-in-out; */
