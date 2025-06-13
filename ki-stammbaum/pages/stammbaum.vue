@@ -2,9 +2,6 @@
   <div class="stammbaum-page">
     <h1>KI-Stammbaum</h1>
 
-    <FilterControls @filters-applied="onFilters" />
-    <Legend :categories="legendCategories" />
-
     <Timeline
       v-if="allGraphDataForTimeline.nodes.length"
       :nodes="allGraphDataForTimeline.nodes"
@@ -47,6 +44,8 @@
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
+    <Legend :categories="legendCategories" />
+    <FilterControls @filters-applied="onFilters" />
   </div>
 </template>
 

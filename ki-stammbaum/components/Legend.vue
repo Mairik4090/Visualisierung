@@ -23,19 +23,39 @@
 <style scoped>
   .legend {
     margin-top: 1rem;
+    /* Richtet die h3 rechtsbündig aus */
+    text-align: right;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    margin-top: 0.25rem;
+    /* Behält den Versatz nach links bei */
+    padding-right: 1.5rem;
   }
 
   .legend-item {
     display: flex;
     align-items: center;
     margin-bottom: 0.25rem;
+
+    /* NEU: Kehrt die visuelle Reihenfolge der Elemente um (Text, dann Box) */
+    flex-direction: row-reverse;
+
+    /* NEU: Richtet den Inhalt am Start der Hauptachse aus. Da die Richtung
+       umgekehrt ist, ist der "Start" nun rechts. */
+    justify-content: flex-start;
   }
 
   .color-box {
     width: 1rem;
     height: 1rem;
-    margin-right: 0.5rem;
+    /* GEÄNDERT: Abstand wieder links von der Box, um sie vom Text zu trennen */
+    margin-left: 0.5rem;
     border-radius: 2px;
     border: 1px solid #ccc;
+    flex-shrink: 0;
   }
 </style>
