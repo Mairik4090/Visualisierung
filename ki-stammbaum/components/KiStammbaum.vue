@@ -95,7 +95,10 @@
   let simulation: d3.Simulation<GraphNode, Link> | null = null; // Updated Link type
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
   let lastTransform: d3.ZoomTransform = d3.zoomIdentity;
-  let previousFrameClusterInfo = new Map<string, { x: number, y: number, childNodeOriginalIds: string[] }>();
+  let previousFrameClusterInfo = new Map<
+    string,
+    { x: number; y: number; childNodeOriginalIds: string[] }
+  >();
 
   const userPositionedNodes = ref<Map<string, { fy: number }>>(new Map());
 
@@ -114,6 +117,7 @@
     func: F,
     waitFor: number,
   ) {
+    console.log(`[${new Date().toISOString()}] debounce function triggered`);
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
     return (...args: Parameters<F>): Promise<ReturnType<F>> =>
@@ -133,6 +137,9 @@
    * This function is debounced to prevent excessive calculations during rapid zoom/pan.
    */
   function processZoomLogic() {
+    console.log(
+      `[${new Date().toISOString()}] processZoomLogic function triggered`,
+    );
     if (xScale && svg.value && lastTransform) {
       const currentWidth = svg.value.clientWidth;
       const minVisibleDataX = lastTransform.invertX(0);
@@ -196,7 +203,11 @@
   const debouncedProcessZoom = debounce(processZoomLogic, 250);
 
   function render(): void {
-    const currentFrameClusterInfo = new Map<string, { x: number, y: number, childNodeOriginalIds: string[] }>();
+    console.log(`[${new Date().toISOString()}] render function triggered`);
+    const currentFrameClusterInfo = new Map<
+      string,
+      { x: number; y: number; childNodeOriginalIds: string[] }
+    >();
     if (!svg.value || !props.nodes || props.nodes.length === 0) return;
     simulation?.stop(); // Stop any ongoing simulation before re-rendering
 
@@ -364,21 +375,27 @@
             } else {
               // Single node in this group, push individually
               originalNodesInGroup.forEach((originalNode) => {
-                const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
+                const userSetFy = userPositionedNodes.value.get(
+                  originalNode.id,
+                )?.fy;
                 const individualGraphNode: GraphNode = {
-                    ...originalNode,
-                    isCluster: false,
-                    count: 1,
-                    fx: null,
-                    fy: userSetFy ?? null,
+                  ...originalNode,
+                  isCluster: false,
+                  count: 1,
+                  fx: null,
+                  fy: userSetFy ?? null,
                 };
                 // Check and assign previous_x, previous_y
                 for (const prevClusterData of previousFrameClusterInfo.values()) {
-                    if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
+                  if (
+                    prevClusterData.childNodeOriginalIds.includes(
+                      originalNode.id,
+                    )
+                  ) {
                     individualGraphNode.previous_x = prevClusterData.x;
                     individualGraphNode.previous_y = prevClusterData.y;
                     break;
-                    }
+                  }
                 }
                 displayNodes.push(individualGraphNode);
               });
@@ -386,7 +403,8 @@
           });
         });
         // Highest Zoom: Show individual nodes
-      } else { // Highest Zoom logic
+      } else {
+        // Highest Zoom logic
         filteredNodes.forEach((originalNode) => {
           const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
           const individualGraphNode: GraphNode = {
@@ -398,7 +416,9 @@
           };
           // Check and assign previous_x, previous_y
           for (const prevClusterData of previousFrameClusterInfo.values()) {
-            if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
+            if (
+              prevClusterData.childNodeOriginalIds.includes(originalNode.id)
+            ) {
               individualGraphNode.previous_x = prevClusterData.x;
               individualGraphNode.previous_y = prevClusterData.y;
               break;
@@ -423,7 +443,11 @@
     );
     yScale = d3
       .scalePoint<string>()
-      .domain(categoriesForScale.length > 0 ? categoriesForScale : ['default_category_for_empty_scale'])
+      .domain(
+        categoriesForScale.length > 0
+          ? categoriesForScale
+          : ['default_category_for_empty_scale'],
+      )
       .range([40, height - 40]); // Padding from top/bottom edges.
 
     // Initialize node positions (x, y) based on their year and category.
@@ -499,6 +523,9 @@
       originalId: string,
       nodesToSearch: GraphNode[],
     ): GraphNode | undefined {
+      console.log(
+        `[${new Date().toISOString()}] findVisualNodeRepresenting function triggered`,
+      );
       let found = nodesToSearch.find(
         (n) => !n.isCluster && n.id === originalId,
       );
@@ -722,7 +749,9 @@
         }
       });
 
-    nodeEnter.attr('cx', d => d.previous_x ?? d.x).attr('cy', d => d.previous_y ?? d.y);
+    nodeEnter
+      .attr('cx', (d) => d.previous_x ?? d.x)
+      .attr('cy', (d) => d.previous_y ?? d.y);
 
     // Merge enter and update selections for nodes.
     const nodeUpdateAndEnter = nodeEnter.merge(nodeSelection);
@@ -841,12 +870,12 @@
         .attr('y2', (d: any) => (d.target as GraphNode).y!) // Link end y.
         .attr('stroke-opacity', 0.6);
 
-      displayNodes.forEach(d => {
+      displayNodes.forEach((d) => {
         if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
           currentFrameClusterInfo.set(d.id, {
             x: d.x,
             y: d.y,
-            childNodeOriginalIds: d.childNodes.map(cn => cn.id)
+            childNodeOriginalIds: d.childNodes.map((cn) => cn.id),
           });
         }
       });
@@ -855,6 +884,7 @@
     // `ticked` function: Called on each step of the physics simulation.
     // Updates the positions of nodes, links, and labels.
     function ticked() {
+      console.log(`[${new Date().toISOString()}] ticked function triggered`);
       linkUpdateAndEnter // Update link endpoints.
         .attr('x1', (d: any) => (d.source as GraphNode).x!)
         .attr('y1', (d: any) => (d.source as GraphNode).y!)
@@ -867,13 +897,14 @@
         .attr('x', (d: any) => (d as GraphNode).x!)
         .attr('y', (d: any) => ((d as GraphNode).y ?? 0) - 12); // Keep label above node.
 
-      nodeUpdateAndEnter.each(function(dNode) { // Use .each to access the data object dNode
+      nodeUpdateAndEnter.each(function (dNode) {
+        // Use .each to access the data object dNode
         const d = dNode as GraphNode; // Cast to GraphNode
         if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
           currentFrameClusterInfo.set(d.id, {
             x: d.x,
             y: d.y,
-            childNodeOriginalIds: d.childNodes.map(cn => cn.id)
+            childNodeOriginalIds: d.childNodes.map((cn) => cn.id),
           });
         }
       });
@@ -883,6 +914,9 @@
     function dragStarted(
       event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
     ) {
+      console.log(
+        `[${new Date().toISOString()}] dragStarted function triggered`,
+      );
       event.sourceEvent?.stopPropagation(); // Prevent zoom/pan during node drag.
       const subjectNode = event.subject as GraphNode;
       if (!event.active && props.usePhysics) {
@@ -898,6 +932,7 @@
     function dragged(
       event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
     ) {
+      console.log(`[${new Date().toISOString()}] dragged function triggered`);
       event.sourceEvent?.stopPropagation();
       const subjectNode = event.subject as GraphNode;
 
@@ -943,6 +978,7 @@
     function dragEnded(
       event: d3.D3DragEvent<SVGCircleElement, GraphNode, unknown>,
     ) {
+      console.log(`[${new Date().toISOString()}] dragEnded function triggered`);
       event.sourceEvent?.stopPropagation();
       if (!xScale) return;
 
@@ -1007,120 +1043,128 @@
   }
 
   // Initial render on mount.
-onMounted(() => {
-  // Der direkte render()-Aufruf wird entfernt, um doppelte Renderings zu vermeiden.
-  // Der Watcher unten kümmert sich um das initiale Rendering.
-  resizeObserver = new ResizeObserver(() => render());
-  if (container.value) resizeObserver.observe(container.value);
-});
-
-// Cleanup on unmount.
-onBeforeUnmount(() => {
-  simulation?.stop(); // Stoppt die D3-Simulation.
-  resizeObserver?.disconnect(); // Trennt den Resize Observer.
-});
-
-// Debounced render to avoid double/triple renders from multiple triggers
-const debouncedRender = debounce(render, 10);
-
-/**
- * Zoomt und schwenkt die Ansicht, um sie an die Grenzen der Kind-Knoten eines gegebenen Clusters anzupassen.
- * @param clusterNode Der Cluster-Knoten, in den hineingezoomt werden soll.
- */
-function zoomToClusterBounds(clusterNode: GraphNode) {
-  if (
-    !svg.value ||
-    !zoomBehavior ||
-    !xScale ||
-    !yScale ||
-    !clusterNode.childNodes ||
-    clusterNode.childNodes.length === 0
-  )
-    return;
-
-  const childNodes = clusterNode.childNodes;
-  let minX = Infinity,
-    maxX = -Infinity,
-    minY = Infinity,
-    maxY = -Infinity;
-
-  // Berechnet die Bounding Box der Kind-Knoten in Datenkoordinaten (Jahr, Kategoriewert).
-  childNodes.forEach((node) => {
-    const nodeX = xScale!(node.year); // Holt die x-Koordinate vom Jahr.
-    const nodeY = yScale!(node.category) ?? svg.value!.clientHeight / 2; // Holt die y-Koordinate von der Kategorie, Fallback zur Mitte.
-    minX = Math.min(minX, nodeX);
-    maxX = Math.max(maxX, nodeX);
-    minY = Math.min(minY, nodeY);
-    maxY = Math.max(maxY, nodeY);
+  onMounted(() => {
+    console.log(`[${new Date().toISOString()}] onMounted hook triggered`);
+    // Der direkte render()-Aufruf wird entfernt, um doppelte Renderings zu vermeiden.
+    // Der Watcher unten kümmert sich um das initiale Rendering.
+    resizeObserver = new ResizeObserver(() => render());
+    if (container.value) resizeObserver.observe(container.value);
   });
-  
-  // (Hier würde die restliche Logik der Funktion folgen, um den Zoom tatsächlich anzuwenden)
-}
 
+  // Cleanup on unmount.
+  onBeforeUnmount(() => {
+    console.log(`[${new Date().toISOString()}] onBeforeUnmount hook triggered`);
+    simulation?.stop(); // Stoppt die D3-Simulation.
+    resizeObserver?.disconnect(); // Trennt den Resize Observer.
+  });
 
-// Speichert vorherige Werte für den Vergleich
-let prevNodes: Node[] | undefined = undefined;
-let prevLinks: Link[] | undefined = undefined;
-let prevYearRange: [number, number] | undefined = undefined;
-let prevUsePhysics: boolean | undefined = undefined;
+  // Debounced render to avoid double/triple renders from multiple triggers
+  const debouncedRender = debounce(render, 10);
 
-function shallowEqualArray(a: any[] | undefined, b: any[] | undefined) {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
-// Dieser einzelne Watcher ist effizienter als mehrere separate Watcher.
-// Er beobachtet alle relevanten Props und rendert nur neu, wenn sich
-// tatsächlich etwas geändert hat.
-watch(
-  () => [props.nodes, props.links, props.usePhysics, props.currentYearRange],
-  () => {
-    let shouldRender = false;
-    
-    // Vergleicht Nodes nur anhand der ID (flach, schnell)
-    const nodeIds = props.nodes?.map((n) => n.id) || [];
-    const prevNodeIds = prevNodes?.map((n) => n.id) || [];
-    if (!shallowEqualArray(nodeIds, prevNodeIds)) {
-      shouldRender = true;
-      prevNodes = props.nodes ? [...props.nodes] : undefined;
-    }
-
-    // Vergleicht Links anhand der Source-Target-ID
-    const linkIds = props.links?.map((l) => `${l.source}-${l.target}`) || [];
-    const prevLinkIds =
-      prevLinks?.map((l) => `${l.source}-${l.target}`) || [];
-    if (!shallowEqualArray(linkIds, prevLinkIds)) {
-      shouldRender = true;
-      prevLinks = props.links ? [...props.links] : undefined;
-    }
-
-    // Vergleicht den Jahresbereich
+  /**
+   * Zoomt und schwenkt die Ansicht, um sie an die Grenzen der Kind-Knoten eines gegebenen Clusters anzupassen.
+   * @param clusterNode Der Cluster-Knoten, in den hineingezoomt werden soll.
+   */
+  function zoomToClusterBounds(clusterNode: GraphNode) {
+    console.log(
+      `[${new Date().toISOString()}] zoomToClusterBounds function triggered`,
+    );
     if (
-      !prevYearRange ||
-      props.currentYearRange[0] !== prevYearRange[0] ||
-      props.currentYearRange[1] !== prevYearRange[1]
-    ) {
-      shouldRender = true;
-      prevYearRange = [...props.currentYearRange];
-    }
+      !svg.value ||
+      !zoomBehavior ||
+      !xScale ||
+      !yScale ||
+      !clusterNode.childNodes ||
+      clusterNode.childNodes.length === 0
+    )
+      return;
 
-    // Vergleicht usePhysics
-    if (prevUsePhysics !== props.usePhysics) {
-      shouldRender = true;
-      prevUsePhysics = props.usePhysics;
-    }
+    const childNodes = clusterNode.childNodes;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
 
-    if (shouldRender) {
-      if (!props.usePhysics) simulation?.stop();
-      debouncedRender();
+    // Berechnet die Bounding Box der Kind-Knoten in Datenkoordinaten (Jahr, Kategoriewert).
+    childNodes.forEach((node) => {
+      const nodeX = xScale!(node.year); // Holt die x-Koordinate vom Jahr.
+      const nodeY = yScale!(node.category) ?? svg.value!.clientHeight / 2; // Holt die y-Koordinate von der Kategorie, Fallback zur Mitte.
+      minX = Math.min(minX, nodeX);
+      maxX = Math.max(maxX, nodeX);
+      minY = Math.min(minY, nodeY);
+      maxY = Math.max(maxY, nodeY);
+    });
+
+    // (Hier würde die restliche Logik der Funktion folgen, um den Zoom tatsächlich anzuwenden)
+  }
+
+  // Speichert vorherige Werte für den Vergleich
+  let prevNodes: Node[] | undefined = undefined;
+  let prevLinks: Link[] | undefined = undefined;
+  let prevYearRange: [number, number] | undefined = undefined;
+  let prevUsePhysics: boolean | undefined = undefined;
+
+  function shallowEqualArray(a: any[] | undefined, b: any[] | undefined) {
+    console.log(
+      `[${new Date().toISOString()}] shallowEqualArray function triggered`,
+    );
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
     }
-  },
-  { deep: false }, // Wichtig: deep: false, da wir einen manuellen, flachen Vergleich durchführen.
-);
+    return true;
+  }
+
+  // Dieser einzelne Watcher ist effizienter als mehrere separate Watcher.
+  // Er beobachtet alle relevanten Props und rendert nur neu, wenn sich
+  // tatsächlich etwas geändert hat.
+  watch(
+    () => [props.nodes, props.links, props.usePhysics, props.currentYearRange],
+    () => {
+      console.log(`[${new Date().toISOString()}] watch callback triggered`);
+      let shouldRender = false;
+
+      // Vergleicht Nodes nur anhand der ID (flach, schnell)
+      const nodeIds = props.nodes?.map((n) => n.id) || [];
+      const prevNodeIds = prevNodes?.map((n) => n.id) || [];
+      if (!shallowEqualArray(nodeIds, prevNodeIds)) {
+        shouldRender = true;
+        prevNodes = props.nodes ? [...props.nodes] : undefined;
+      }
+
+      // Vergleicht Links anhand der Source-Target-ID
+      const linkIds = props.links?.map((l) => `${l.source}-${l.target}`) || [];
+      const prevLinkIds =
+        prevLinks?.map((l) => `${l.source}-${l.target}`) || [];
+      if (!shallowEqualArray(linkIds, prevLinkIds)) {
+        shouldRender = true;
+        prevLinks = props.links ? [...props.links] : undefined;
+      }
+
+      // Vergleicht den Jahresbereich
+      if (
+        !prevYearRange ||
+        props.currentYearRange[0] !== prevYearRange[0] ||
+        props.currentYearRange[1] !== prevYearRange[1]
+      ) {
+        shouldRender = true;
+        prevYearRange = [...props.currentYearRange];
+      }
+
+      // Vergleicht usePhysics
+      if (prevUsePhysics !== props.usePhysics) {
+        shouldRender = true;
+        prevUsePhysics = props.usePhysics;
+      }
+
+      if (shouldRender) {
+        if (!props.usePhysics) simulation?.stop();
+        debouncedRender();
+      }
+    },
+    { deep: false }, // Wichtig: deep: false, da wir einen manuellen, flachen Vergleich durchführen.
+  );
 </script>
 
 <style scoped>
