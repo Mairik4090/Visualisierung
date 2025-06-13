@@ -1,6 +1,5 @@
 <template>
   <div ref="container" class="ki-stammbaum-container">
-    <h2>KI-Stammbaum Visualisierung</h2>
     <svg
       ref="svg"
       class="ki-stammbaum-svg"
@@ -23,7 +22,14 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, onBeforeUnmount, ref, watch, withDefaults, type PropType } from 'vue';
+  import {
+    onMounted,
+    onBeforeUnmount,
+    ref,
+    watch,
+    withDefaults,
+    type PropType,
+  } from 'vue';
   import * as d3 from 'd3';
   import type { Node, Link } from '@/types/concept';
 
@@ -33,17 +39,20 @@
     y?: number; // Current y position
     fx?: number | null; // Fixed x position (for physics)
     fy?: number | null; // Fixed y position (for physics)
-    isCluster?: boolean;  // True if this node represents a cluster
-    count?: number;       // Number of original nodes it represents (1 if not a cluster)
-    childNodes?: Node[];  // Array of original nodes if it's a cluster
+    isCluster?: boolean; // True if this node represents a cluster
+    count?: number; // Number of original nodes it represents (1 if not a cluster)
+    childNodes?: Node[]; // Array of original nodes if it's a cluster
   }
 
   const props = defineProps({
     nodes: { type: Array as PropType<Node[] | undefined> },
     links: { type: Array as PropType<Link[] | undefined> },
     usePhysics: { type: Boolean, default: true },
-    currentYearRange: { type: Array as PropType<[number, number]>, required: true },
-    highlightNodeId: { type: String as PropType<string | null>, default: null } // New prop
+    currentYearRange: {
+      type: Array as PropType<[number, number]>,
+      required: true,
+    },
+    highlightNodeId: { type: String as PropType<string | null>, default: null }, // New prop
   });
 
   const emit = defineEmits<{
@@ -87,11 +96,12 @@
 
     // Add a background rectangle for capturing clicks on empty space
     // Insert it as the first child so it's behind other elements
-    svgSel.insert('rect', ':first-child')
+    svgSel
+      .insert('rect', ':first-child')
       .attr('width', width)
       .attr('height', height)
       .attr('fill', 'transparent') // Make it invisible
-      .on('click', function(event: PointerEvent) {
+      .on('click', function (event: PointerEvent) {
         // event.target will be this rect if the click was on it (empty space)
         if (!xScale) return;
         // 'this' is the DOM element (the rect). d3.pointer needs the event and the target DOM element.
@@ -104,52 +114,64 @@
     // --- START NODE FILTERING ---
     let filteredNodes: Node[] = [];
     if (props.nodes && props.nodes.length > 0) {
-      filteredNodes = props.nodes.filter(node =>
-        node.year >= props.currentYearRange[0] && node.year <= props.currentYearRange[1]
+      filteredNodes = props.nodes.filter(
+        (node) =>
+          node.year >= props.currentYearRange[0] &&
+          node.year <= props.currentYearRange[1],
       );
     }
     // --- END NODE FILTERING ---
 
     // --- START CLUSTERING LOGIC ---
     const displayNodes: GraphNode[] = [];
-    if (filteredNodes.length > 0) { // Use filteredNodes here
-        const groupedByYearAndCategory = d3.group(filteredNodes, d => d.year, d => d.category); // Use filteredNodes here
+    if (filteredNodes.length > 0) {
+      // Use filteredNodes here
+      const groupedByYearAndCategory = d3.group(
+        filteredNodes,
+        (d) => d.year,
+        (d) => d.category,
+      ); // Use filteredNodes here
 
-        groupedByYearAndCategory.forEach((categoriesInYear, yearVal) => {
-            categoriesInYear.forEach((originalNodesInGroup, categoryVal) => {
-                const year = Number(yearVal);
-                const category = String(categoryVal);
+      groupedByYearAndCategory.forEach((categoriesInYear, yearVal) => {
+        categoriesInYear.forEach((originalNodesInGroup, categoryVal) => {
+          const year = Number(yearVal);
+          const category = String(categoryVal);
 
-                if (originalNodesInGroup.length > 1) { // Create a cluster node
-                    const clusterId = `cluster-${year}-${category}`;
-                    const userSetClusterFy = userPositionedNodes.value.get(clusterId)?.fy;
-                    displayNodes.push({
-                        id: clusterId,
-                        year: year,
-                        category: category,
-                        description: `Cluster of ${originalNodesInGroup.length} items in ${category} for ${year}`,
-                        dependencies: [], // TODO: Aggregate dependencies? For now, empty.
-                        name: `${originalNodesInGroup.length} ${category}`,
-                        isCluster: true,
-                        count: originalNodesInGroup.length,
-                        childNodes: originalNodesInGroup,
-                        fx: null,
-                        fy: userSetClusterFy ?? null,
-                    });
-                } else { // Single node, add as is but typed as GraphNode
-                    const originalNode = originalNodesInGroup[0];
-                    const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
-                    const graphNodeVersion: GraphNode = {
-                       ...originalNode,
-                       isCluster: false,
-                       count: 1,
-                       fx: null,
-                       fy: userSetFy ?? null,
-                    };
-                    displayNodes.push(graphNodeVersion);
-                }
+          if (originalNodesInGroup.length > 1) {
+            // Create a cluster node
+            const clusterId = `cluster-${year}-${category}`;
+            const userSetClusterFy =
+              userPositionedNodes.value.get(clusterId)?.fy;
+            displayNodes.push({
+              id: clusterId,
+              year: year,
+              category: category,
+              description: `Cluster of ${originalNodesInGroup.length} items in ${category} for ${year}`,
+              dependencies: [], // TODO: Aggregate dependencies? For now, empty.
+              name: `${originalNodesInGroup.length} ${category}`,
+              isCluster: true,
+              count: originalNodesInGroup.length,
+              childNodes: originalNodesInGroup,
+              fx: null,
+              fy: userSetClusterFy ?? null,
             });
+          } else {
+            // Single node, add as is but typed as GraphNode
+            const originalNode = originalNodesInGroup[0];
+            const userSetFy = userPositionedNodes.value.get(
+              originalNode.id,
+            )?.fy;
+            const graphNodeVersion: GraphNode = {
+              ...originalNode,
+              isCluster: false,
+              count: 1,
+              fx: null,
+              fy: userSetFy ?? null,
+            };
+            displayNodes.push(graphNodeVersion);
+          }
         });
+      });
     }
     // --- END CLUSTERING LOGIC ---
 
@@ -160,7 +182,9 @@
       .range([40, width - 40]);
 
     // Kategorien und Y-Skala - Use categories from displayNodes
-    const categoriesForScale = Array.from(new Set(displayNodes.map((d: GraphNode) => d.category)));
+    const categoriesForScale = Array.from(
+      new Set(displayNodes.map((d: GraphNode) => d.category)),
+    );
     yScale = d3
       .scalePoint<string>()
       .domain(categoriesForScale)
@@ -168,7 +192,12 @@
 
     // Initialize node positions for displayNodes
     displayNodes.forEach((n: GraphNode) => {
-      if (xScale && yScale && typeof n.year === 'number' && typeof n.category === 'string') {
+      if (
+        xScale &&
+        yScale &&
+        typeof n.year === 'number' &&
+        typeof n.category === 'string'
+      ) {
         n.x = xScale(n.year);
         n.y = yScale(n.category);
       } else {
@@ -202,15 +231,16 @@
     // Hauptgruppe für alle grafischen Elemente
     const g = svgSel.append('g'); // Main group for elements that will be transformed
 
-    if (!zoomBehavior) { // Initialize zoomBehavior only if it's null
-        zoomBehavior = d3
-            .zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.5, 5])
-            .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
-                // Note: event.transform is the new transform.
-                g.attr('transform', event.transform.toString());
-                lastTransform = event.transform; // Update lastTransform with the latest
-            });
+    if (!zoomBehavior) {
+      // Initialize zoomBehavior only if it's null
+      zoomBehavior = d3
+        .zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.5, 5])
+        .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+          // Note: event.transform is the new transform.
+          g.attr('transform', event.transform.toString());
+          lastTransform = event.transform; // Update lastTransform with the latest
+        });
     }
 
     // Always attach the zoom behavior to the SVG element.
@@ -219,29 +249,51 @@
     // Restore the last known transform.
     // This call will also trigger the 'zoom' event, ensuring 'g' is transformed
     // and 'lastTransform' is correctly set by the 'on.zoom' handler.
-    if (lastTransform && zoomBehavior) { // lastTransform should always exist due to initialization with d3.zoomIdentity
-        (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(svgSel as any, lastTransform);
+    if (lastTransform && zoomBehavior) {
+      // lastTransform should always exist due to initialization with d3.zoomIdentity
+      (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(
+        svgSel as any,
+        lastTransform,
+      );
     }
 
     // --- LINK RE-MAPPING ---
-    function findVisualNodeRepresenting(originalId: string, nodesToSearch: GraphNode[]): GraphNode | undefined {
-        let found = nodesToSearch.find(n => !n.isCluster && n.id === originalId);
-        if (found) return found;
-        // If not found as a direct node, check if it's part of a cluster
-        found = nodesToSearch.find(n => n.isCluster && n.childNodes?.some(child => child.id === originalId));
-        return found;
+    function findVisualNodeRepresenting(
+      originalId: string,
+      nodesToSearch: GraphNode[],
+    ): GraphNode | undefined {
+      let found = nodesToSearch.find(
+        (n) => !n.isCluster && n.id === originalId,
+      );
+      if (found) return found;
+      // If not found as a direct node, check if it's part of a cluster
+      found = nodesToSearch.find(
+        (n) =>
+          n.isCluster && n.childNodes?.some((child) => child.id === originalId),
+      );
+      return found;
     }
 
     const visualLinks: d3.SimulationLinkDatum<GraphNode>[] = [];
     if (props.links) {
-        props.links.forEach(originalLink => {
-            const sourceVisual = findVisualNodeRepresenting(originalLink.source, displayNodes);
-            const targetVisual = findVisualNodeRepresenting(originalLink.target, displayNodes);
+      props.links.forEach((originalLink) => {
+        const sourceVisual = findVisualNodeRepresenting(
+          originalLink.source,
+          displayNodes,
+        );
+        const targetVisual = findVisualNodeRepresenting(
+          originalLink.target,
+          displayNodes,
+        );
 
-            if (sourceVisual && targetVisual && sourceVisual.id !== targetVisual.id) {
-                visualLinks.push({ source: sourceVisual, target: targetVisual });
-            }
-        });
+        if (
+          sourceVisual &&
+          targetVisual &&
+          sourceVisual.id !== targetVisual.id
+        ) {
+          visualLinks.push({ source: sourceVisual, target: targetVisual });
+        }
+      });
     }
     // --- END LINK RE-MAPPING ---
 
@@ -255,18 +307,21 @@
       .selectAll('line')
       .data(visualLinks, (d: any) => `${d.source.id}-${d.target.id}`); // Key function for links
 
-    linkSelection.exit()
-      .transition().duration(transitionDuration)
+    linkSelection
+      .exit()
+      .transition()
+      .duration(transitionDuration)
       .attr('stroke-opacity', 0)
       .remove();
 
-    const linkEnter = linkSelection.enter().append('line')
+    const linkEnter = linkSelection
+      .enter()
+      .append('line')
       .attr('stroke-opacity', 0)
       .attr('stroke-width', 1.5);
 
     const linkUpdateAndEnter = linkEnter.merge(linkSelection);
     // Specific attributes for links will be set in the if/else for props.usePhysics
-
 
     // Knoten zeichnen (use displayNodes)
     const nodeSelection = g
@@ -274,18 +329,24 @@
       .selectAll('circle')
       .data(displayNodes, (d: GraphNode) => d.id);
 
-    nodeSelection.exit()
-      .transition().duration(transitionDuration)
+    nodeSelection
+      .exit()
+      .transition()
+      .duration(transitionDuration)
       .attr('r', 0)
       .style('opacity', 0)
       .remove();
 
-    const nodeEnter = nodeSelection.enter().append('circle')
+    const nodeEnter = nodeSelection
+      .enter()
+      .append('circle')
       .attr('r', 0)
       .style('opacity', 0)
       .attr('fill', (d: GraphNode) => {
-          const baseColor = color(d.category)!;
-          return d.isCluster ? d3.color(baseColor)?.darker(0.5).toString() ?? '#555' : baseColor;
+        const baseColor = color(d.category)!;
+        return d.isCluster
+          ? (d3.color(baseColor)?.darker(0.5).toString() ?? '#555')
+          : baseColor;
       })
       .style('cursor', 'pointer')
       .on('click', (_e, d) => emit('conceptSelected', d as GraphNode))
@@ -310,12 +371,16 @@
       .selectAll('text')
       .data(displayNodes, (d: GraphNode) => d.id);
 
-    labelSelection.exit()
-      .transition().duration(transitionDuration)
+    labelSelection
+      .exit()
+      .transition()
+      .duration(transitionDuration)
       .style('opacity', 0)
       .remove();
 
-    const labelEnter = labelSelection.enter().append('text')
+    const labelEnter = labelSelection
+      .enter()
+      .append('text')
       .style('opacity', 0)
       .attr('text-anchor', 'middle')
       .style('font-size', '10px')
@@ -325,28 +390,33 @@
     const labelUpdateAndEnter = labelEnter.merge(labelSelection);
     // Specific attributes for labels will be set in the if/else for props.usePhysics
 
-
     if (props.usePhysics) {
       // For physics, update positions in the tick function
       nodeUpdateAndEnter // Apply to all nodes
-        .attr('r', (d: GraphNode) => d.isCluster ? 10 : 6) // Set radius immediately for physics
+        .attr('r', (d: GraphNode) => (d.isCluster ? 10 : 6)) // Set radius immediately for physics
         .style('opacity', 1) // Set opacity immediately
-        .attr('stroke', (d: GraphNode) => d.id === props.highlightNodeId ? 'orange' : '#fff')
-        .attr('stroke-width', (d: GraphNode) => d.id === props.highlightNodeId ? 3 : 1.5);
-        // cx, cy will be set by simulation
+        .attr('stroke', (d: GraphNode) =>
+          d.id === props.highlightNodeId ? 'orange' : '#fff',
+        )
+        .attr('stroke-width', (d: GraphNode) =>
+          d.id === props.highlightNodeId ? 3 : 1.5,
+        );
+      // cx, cy will be set by simulation
 
       labelUpdateAndEnter.style('opacity', 1); // text and other attributes already set on enter
-        // x, y will be set by simulation in ticked function
+      // x, y will be set by simulation in ticked function
 
       linkUpdateAndEnter.attr('stroke-opacity', 0.6); // stroke-width already set on enter
-        // x1,y1,x2,y2 will be set by simulation
+      // x1,y1,x2,y2 will be set by simulation
 
       simulation = d3
         .forceSimulation(displayNodes) // Use displayNodes
         .force(
           'link',
           d3 // Use visualLinks
-            .forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(visualLinks)
+            .forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(
+              visualLinks,
+            )
             .id((d: GraphNode) => d.id) // d is GraphNode from displayNodes
             .distance(60),
         )
@@ -358,22 +428,29 @@
       // Render nodes directly using calculated/dragged positions from displayNodes
       // Apply transitions for non-physics updates
       nodeUpdateAndEnter
-        .transition().duration(transitionDuration)
+        .transition()
+        .duration(transitionDuration)
         .attr('cx', (d: GraphNode) => d.x!)
         .attr('cy', (d: GraphNode) => d.y!)
-        .attr('r', (d: GraphNode) => d.isCluster ? 10 : 6)
+        .attr('r', (d: GraphNode) => (d.isCluster ? 10 : 6))
         .style('opacity', 1)
-        .attr('stroke', (d: GraphNode) => d.id === props.highlightNodeId ? 'orange' : '#fff')
-        .attr('stroke-width', (d: GraphNode) => d.id === props.highlightNodeId ? 3 : 1.5);
+        .attr('stroke', (d: GraphNode) =>
+          d.id === props.highlightNodeId ? 'orange' : '#fff',
+        )
+        .attr('stroke-width', (d: GraphNode) =>
+          d.id === props.highlightNodeId ? 3 : 1.5,
+        );
 
       labelUpdateAndEnter
-        .transition().duration(transitionDuration)
+        .transition()
+        .duration(transitionDuration)
         .attr('x', (d: GraphNode) => d.x!)
         .attr('y', (d: GraphNode) => (d.y ?? 0) - 12) // Ensure y is defined for calculation
         .style('opacity', 1);
 
       linkUpdateAndEnter // Using visualLinks, source/target are GraphNode from displayNodes
-        .transition().duration(transitionDuration)
+        .transition()
+        .duration(transitionDuration)
         .attr('x1', (d: any) => (d.source as GraphNode).x!)
         .attr('y1', (d: any) => (d.source as GraphNode).y!)
         .attr('x2', (d: any) => (d.target as GraphNode).x!)
@@ -429,14 +506,18 @@
 
         // Update corresponding label position
         // Need to select the specific label for this node
-        svgSel.selectAll('text') // svgSel is d3.select(svg.value)
+        svgSel
+          .selectAll('text') // svgSel is d3.select(svg.value)
           .filter((d: unknown) => (d as GraphNode).id === subjectNode.id)
           .attr('x', subjectNode.x)
           .attr('y', (subjectNode.y ?? 0) - 12);
 
         // Update links connected to this node
         link
-          .filter((l: any) => l.source.id === subjectNode.id || l.target.id === subjectNode.id)
+          .filter(
+            (l: any) =>
+              l.source.id === subjectNode.id || l.target.id === subjectNode.id,
+          )
           .attr('x1', (d: any) => (d.source as GraphNode).x!)
           .attr('y1', (d: any) => (d.source as GraphNode).y!)
           .attr('x2', (d: any) => (d.target as GraphNode).x!)
@@ -468,14 +549,18 @@
           .attr('cx', subjectNode.x)
           .attr('cy', subjectNode.y);
 
-        svgSel.selectAll('text')
+        svgSel
+          .selectAll('text')
           .filter((d: unknown) => (d as GraphNode).id === subjectNode.id)
           .attr('x', subjectNode.x)
           .attr('y', (subjectNode.y ?? 0) - 12);
 
         // Update links connected to this node
         link
-          .filter((l: any) => l.source.id === subjectNode.id || l.target.id === subjectNode.id)
+          .filter(
+            (l: any) =>
+              l.source.id === subjectNode.id || l.target.id === subjectNode.id,
+          )
           .attr('x1', (d: any) => (d.source as GraphNode).x!)
           .attr('y1', (d: any) => (d.source as GraphNode).y!)
           .attr('x2', (d: any) => (d.target as GraphNode).x!)
