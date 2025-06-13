@@ -61,8 +61,12 @@
   import Legend from '@/components/Legend.vue';
   import Timeline from '@/components/Timeline.vue';
   import { useStammbaumData } from '@/composables/useStammbaumData';
-  import { transformToGraph } from '@/utils/graph-transform';
+  import { transformToGraph, type Graph } from '@/utils/graph-transform'; // Imported Graph type
   import type { Node } from '@/types/concept'; // Added Node type import
+
+  // Cache variables
+  let previousFiltersSignature: string | null = null;
+  let cachedStammbaumGraph: Graph | null = null;
 
   /** Datenabruf */
   const { data, pending, error } = useStammbaumData();
@@ -216,9 +220,32 @@
       );
     }
 
+    // Generate current filters signature
+    const currentFiltersSignature =
+      JSON.stringify(activeFilters.value) +
+      ':' +
+      nodesToProcess
+        .map((n) => n.id)
+        .sort()
+        .join(',');
+
+    // Check cache
+    if (
+      currentFiltersSignature === previousFiltersSignature &&
+      cachedStammbaumGraph
+    ) {
+      return cachedStammbaumGraph;
+    }
+
     // Transform the (potentially filtered) list of nodes into a graph structure.
     // transformToGraph also generates the corresponding links based on dependencies.
-    return transformToGraph(nodesToProcess);
+    const newGraph = transformToGraph(nodesToProcess);
+
+    // Update cache
+    previousFiltersSignature = currentFiltersSignature;
+    cachedStammbaumGraph = newGraph;
+
+    return newGraph;
   });
 
   /** Initiales Setzen des Zeitbereichs basierend auf den Daten */
