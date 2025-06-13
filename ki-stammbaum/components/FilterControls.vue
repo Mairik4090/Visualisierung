@@ -2,12 +2,23 @@
   <div class="filter-controls-container">
     <h3>Filter und Sortierung</h3>
     <div>
-      <label for="year-filter">Jahr:</label>
+      <label for="start-year-filter">Start Year:</label>
       <input
-        id="year-filter"
-        v-model="yearFilter"
+        id="start-year-filter"
+        v-model="startYearFilter"
         type="number"
         placeholder="z.B. 1950"
+        min="1900"
+        max="2100"
+      />
+    </div>
+    <div>
+      <label for="end-year-filter">End Year:</label>
+      <input
+        id="end-year-filter"
+        v-model="endYearFilter"
+        type="number"
+        placeholder="z.B. 2000"
         min="1900"
         max="2100"
       />
@@ -28,17 +39,33 @@
 <script setup lang="ts">
   import { ref, defineEmits } from 'vue';
 
+  /**
+   * Defines the event emitted by this component.
+   * `filtersApplied`: Emitted when the user clicks the "Filter anwenden" button.
+   * The payload is an object containing the selected filter values:
+   *   {
+   *     startYear: number | null, // The selected start year, or null if empty.
+   *     endYear: number | null,   // The selected end year, or null if empty.
+   *     type: string              // The selected category type, or "" for "Alle".
+   *   }
+   */
   const emit = defineEmits(['filtersApplied']);
 
-  const yearFilter = ref<number | null>(null);
-  const typeFilter = ref<string>('');
+  // Reactive refs for storing the current values of the filter inputs.
+  const startYearFilter = ref<number | null>(null); // Bound to the "Start Year" input.
+  const endYearFilter = ref<number | null>(null);   // Bound to the "End Year" input.
+  const typeFilter = ref<string>('');              // Bound to the "Typ" select input.
 
+  /**
+   * Gathers the current filter values from the refs and emits the `filtersApplied` event.
+   */
   function applyFilters() {
     const filters = {
-      year: yearFilter.value,
+      startYear: startYearFilter.value,
+      endYear: endYearFilter.value,
       type: typeFilter.value,
     };
-    emit('filtersApplied', filters);
+    emit('filtersApplied', filters); // Emit the collected filters to the parent component.
   }
 </script>
 
