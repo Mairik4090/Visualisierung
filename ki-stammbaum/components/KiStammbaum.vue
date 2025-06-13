@@ -34,9 +34,10 @@
   import * as d3 from 'd3';
   import type { Node, Link } from '@/types/concept';
 
-  // Zoom level thresholds for dynamic clustering
-  const VERY_LOW_ZOOM_THRESHOLD = 0.8; // Below this, nodes cluster into broad ~50-year buckets
-  const LOW_ZOOM_THRESHOLD = 1.2;    // Below this (and above VERY_LOW), nodes cluster into ~10-year buckets
+  // New zoom thresholds
+  const GLOBAL_CLUSTER_THRESHOLD = 0.5;
+  const CATEGORY_DECADE_CLUSTER_THRESHOLD = 1.0;
+  const CATEGORY_YEAR_CLUSTER_THRESHOLD = 1.8;
 
   interface GraphNode extends Node {
     name?: string;
@@ -47,6 +48,8 @@
     isCluster?: boolean; // True if this node represents a cluster
     count?: number; // Number of original nodes it represents (1 if not a cluster)
     childNodes?: Node[]; // Array of original nodes if it's a cluster
+    categoriesInCluster?: string[]; // For global clusters
+    categoryColorsInCluster?: string[]; // For global clusters
   }
 
   const props = defineProps({
@@ -125,7 +128,7 @@
       const minVisibleYear = xScale.invert(minVisibleDataX);
       const maxVisibleYear = xScale.invert(maxVisibleDataX);
       // Emit the calculated visible year range for other components (e.g., Timeline) to sync.
-      emit('mainViewRangeChanged', [Math.round(minVisibleYear), Math.round(maxVisibleYear)]);
+      // emit('mainViewRangeChanged', [Math.round(minVisibleYear), Math.round(maxVisibleYear)]);
     }
     // Call the main render function to update graph elements based on the new zoom level and view.
     render();
@@ -200,68 +203,71 @@
     const displayNodes: GraphNode[] = [];
     const currentZoomScale = lastTransform.k; // Current zoom factor
 
+    // Define color scale here so it can be used by clustering logic
+    const allNodeCategories = Array.from(new Set(filteredNodes.map(n => n.category)));
+    const color = d3.scaleOrdinal<string>().domain(allNodeCategories).range(d3.schemeCategory10);
+
     if (filteredNodes.length > 0) {
-      // Strategy 1: Very low zoom - Cluster by large year buckets (e.g., 50 years)
-      if (currentZoomScale < VERY_LOW_ZOOM_THRESHOLD) {
+      // Most Zoomed Out: Global Clusters by 50-year buckets
+      if (currentZoomScale < GLOBAL_CLUSTER_THRESHOLD) {
         const yearBucketSize = 50; // Define bucket size (e.g., 50 years)
-        const groupedByLargeYearBuckets = d3.group(
+        const groupedByGlobalBuckets = d3.group(
           filteredNodes,
           (d) => Math.floor(d.year / yearBucketSize) * yearBucketSize
         );
 
-        groupedByLargeYearBuckets.forEach((nodesInBucket, bucketYear) => {
-          const representativeYear = bucketYear;
-          const clusterId = `cluster-vl-${representativeYear}`;
+        groupedByGlobalBuckets.forEach((nodesInBucket, bucketYear) => {
+          const representativeYear = bucketYear + yearBucketSize / 2; // Center of the bucket
+          const clusterId = `global-cluster-${bucketYear}`;
           const childNodes = [...nodesInBucket];
-          const commonCategory = childNodes[0]?.category ?? 'cluster';
+          const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
+          const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat));
 
           displayNodes.push({
             id: clusterId,
             year: representativeYear,
-            category: commonCategory,
-            name: `${childNodes.length} items (ca. ${representativeYear})`,
-            description: `Cluster of ${childNodes.length} concepts around ${representativeYear}`,
+            category: 'global_cluster', // Assign a generic category
+            name: `${childNodes.length} items (ca. ${bucketYear} - ${bucketYear + yearBucketSize -1})`,
+            description: `Global cluster of ${childNodes.length} concepts from ${bucketYear} to ${bucketYear + yearBucketSize - 1}. Categories: ${categoriesInCluster.join(', ')}`,
             dependencies: [],
             isCluster: true,
             count: childNodes.length,
             childNodes: childNodes,
+            categoriesInCluster: categoriesInCluster,
+            categoryColorsInCluster: categoryColorsInCluster,
             fx: null,
             fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
           });
         });
-
-      // Strategy 2: Low zoom - Cluster by medium year buckets (e.g., 10 years)
-      } else if (currentZoomScale < LOW_ZOOM_THRESHOLD) {
-        const yearBucketSize = 10; // Define bucket size (e.g., 10 years)
-        const groupedByMediumYearBuckets = d3.group(
+      // Category-Decade Clusters
+      } else if (currentZoomScale < CATEGORY_DECADE_CLUSTER_THRESHOLD) {
+        const groupedByDecadeAndCategory = d3.group(
           filteredNodes,
-          (d) => Math.floor(d.year / yearBucketSize) * yearBucketSize
+          (d) => Math.floor(d.year / 10) * 10, // Group by decade
+          (d) => d.category // Then by category
         );
 
-        groupedByMediumYearBuckets.forEach((nodesInBucket, bucketYear) => {
-          const representativeYear = bucketYear;
-          const clusterId = `cluster-l-${representativeYear}`;
-          const childNodes = [...nodesInBucket];
-          const commonCategory = childNodes[0]?.category ?? 'cluster';
-
-          displayNodes.push({
-            id: clusterId,
-            year: representativeYear,
-            category: commonCategory,
-            name: `${childNodes.length} items (${representativeYear}s)`,
-            description: `Cluster of ${childNodes.length} concepts from the ${representativeYear}s`,
-            dependencies: [],
-            isCluster: true,
-            count: childNodes.length,
-            childNodes: childNodes,
-            fx: null,
-            fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
+        groupedByDecadeAndCategory.forEach((categoriesInDecade, decade) => {
+          categoriesInDecade.forEach((childNodesInGroup, category) => {
+            const representativeYear = decade + 5; // Mid-point of the decade
+            const clusterId = `cat-decade-cluster-${decade}-${category}`;
+            displayNodes.push({
+              id: clusterId,
+              year: representativeYear,
+              category: category,
+              name: `${childNodesInGroup.length} ${category} (${decade}s)`,
+              description: `Cluster of ${childNodesInGroup.length} ${category} concepts from the ${decade}s`,
+              dependencies: [],
+              isCluster: true,
+              count: childNodesInGroup.length,
+              childNodes: childNodesInGroup,
+              fx: null,
+              fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
+            });
           });
         });
-
-      // Strategy 3: Higher zoom - Cluster by year and category, or show individual nodes
-      } else {
-        // Group nodes first by year, then by category for potential fine-grained clustering.
+      // Category-Year Clusters
+      } else if (currentZoomScale < CATEGORY_YEAR_CLUSTER_THRESHOLD) {
         const groupedByYearAndCategory = d3.group(
           filteredNodes,
           (d) => d.year,
@@ -273,22 +279,22 @@
             const year = Number(yearVal);
             const category = String(categoryVal);
 
-            if (originalNodesInGroup.length > 1 && currentZoomScale < 2.5) {
-              const clusterId = `cluster-m-${year}-${category}`;
+            if (originalNodesInGroup.length > 1) { // Create cluster if more than one node
+              const clusterId = `cat-year-cluster-${year}-${category}`;
               displayNodes.push({
                 id: clusterId,
                 year: year,
                 category: category,
+                name: `${originalNodesInGroup.length} ${category} (${year})`,
                 description: `Cluster of ${originalNodesInGroup.length} ${category} items for ${year}`,
                 dependencies: [],
-                name: `${originalNodesInGroup.length} ${category}`,
                 isCluster: true,
                 count: originalNodesInGroup.length,
                 childNodes: originalNodesInGroup,
                 fx: null,
                 fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
               });
-            } else {
+            } else { // Single node in this group, push individually
               originalNodesInGroup.forEach(originalNode => {
                 const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
                 displayNodes.push({
@@ -300,6 +306,18 @@
                 });
               });
             }
+          });
+        });
+      // Highest Zoom: Show individual nodes
+      } else {
+        filteredNodes.forEach(originalNode => {
+          const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
+          displayNodes.push({
+            ...originalNode,
+            isCluster: false,
+            count: 1,
+            fx: null, // fx will be set by physics if enabled
+            fy: userSetFy ?? null,
           });
         });
       }
@@ -333,7 +351,8 @@
         typeof n.category === 'string'
       ) {
         n.x = xScale(n.year); // Calculate x from year.
-        n.y = yScale(n.category); // Calculate y from category.
+        // For global clusters, assign a generic y position or handle differently if needed
+        n.y = n.category === 'global_cluster' ? height / 2 : yScale(n.category);
       } else {
         // Fallback position if year/category is missing (should ideally not happen for valid data).
         n.x = width / 2;
@@ -353,12 +372,6 @@
         }
       });
     }
-
-    // Color scale for node categories.
-    const color = d3
-      .scaleOrdinal<string>()
-      .domain(categoriesForScale) // Domain is the set of unique categories.
-      .range(d3.schemeCategory10); // Uses a predefined D3 color scheme.
 
     // Main <g> element to hold all visual elements (nodes, links, labels).
     // Zoom transformations will be applied to this group.
@@ -523,29 +536,22 @@
       .attr('r', 0)
       .style('opacity', 0)
       .attr('fill', (d: GraphNode) => {
-        const baseColor = color(d.category)!;
-        return d.isCluster
-          ? (d3.color(baseColor)?.darker(0.5).toString() ?? '#555')
-          : baseColor;
+        if (d.isCluster) {
+          if (d.category === 'global_cluster') {
+            return d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0 ? d.categoryColorsInCluster[0] : '#888'; // Use first color or fallback grey
+          }
+          const baseColor = color(d.category)!;
+          return d3.color(baseColor)?.darker(0.5).toString() ?? '#555';
+        }
+        return color(d.category)!;
       })
       .style('cursor', 'pointer') // Indicate nodes are interactive.
       // Click handler for nodes.
       .on('click', (_e, d: GraphNode) => {
-        const currentZoomScale = lastTransform.k;
         // Check if the clicked node is a cluster and has child nodes.
         if (d.isCluster && d.childNodes && d.childNodes.length > 0) {
-          // Determine if the cluster should be expanded (zoomed into) based on current zoom level and cluster type.
-          // Different cluster types (vl, l, m) might have different zoom thresholds for expansion.
-          if ( (currentZoomScale < VERY_LOW_ZOOM_THRESHOLD && d.id.startsWith('cluster-vl-')) || // Very large clusters
-               (currentZoomScale < LOW_ZOOM_THRESHOLD && d.id.startsWith('cluster-l-')) ||    // Large clusters
-               (currentZoomScale < 2.0 && d.id.startsWith('cluster-m-'))                     // Medium clusters (year/category)
-          ) {
-            // If conditions met, zoom to the bounds of the cluster's children.
-            zoomToClusterBounds(d);
-          } else {
-            // Otherwise (e.g., already zoomed in enough, or it's a detailed cluster), treat as a selection.
-            emit('conceptSelected', d);
-          }
+          // Always treat as a selection, regardless of zoom or cluster type for now.
+          emit('conceptSelected', d);
         } else {
           // If it's not a cluster or has no children, emit conceptSelected event.
           emit('conceptSelected', d);
@@ -555,12 +561,46 @@
       .on('mouseover', function (event: MouseEvent, d: GraphNode) { // Use 'function' to access 'this' if needed by D3, though not used here.
         emit('nodeHovered', d.id); // Emit hover event for parent component.
         if (tooltip.value) { // Check if tooltip DOM element is available.
-          // Populate tooltip content.
-          tooltip.value.innerHTML = `
-            <strong>${d.name ?? 'N/A'}</strong><br>
-            Year of Origin: ${d.year ?? 'N/A'}<br>
-            Short Description: ${d.description || 'No short description available.'}
-          `;
+          let tooltipContent = '';
+          if (d.isCluster) {
+            if (d.category === 'global_cluster') {
+              tooltipContent = `
+                <strong>Cluster: ${d.name ?? 'N/A'}</strong><br>
+                Time Span: Approx. ${d.year ? (d.year - 25) + ' - ' + (d.year + 24) : 'N/A'}<br>
+                Total Items: ${d.count ?? 'N/A'}<br>
+                Categories: ${d.categoriesInCluster ? d.categoriesInCluster.join(', ') : 'N/A'}
+              `;
+            } else if (d.id.startsWith('cat-decade-cluster-')) {
+              tooltipContent = `
+                <strong>Decade Cluster: ${d.name ?? 'N/A'}</strong><br>
+                Category: ${d.category ?? 'N/A'}<br>
+                Total Items: ${d.count ?? 'N/A'}<br>
+                Description: ${d.description || 'No short description available.'}
+              `;
+            } else if (d.id.startsWith('cat-year-cluster-')) {
+              tooltipContent = `
+                <strong>Year Cluster: ${d.name ?? 'N/A'}</strong><br>
+                Category: ${d.category ?? 'N/A'}<br>
+                Year: ${d.year ?? 'N/A'}<br>
+                Total Items: ${d.count ?? 'N/A'}<br>
+                Description: ${d.description || 'No short description available.'}
+              `;
+            } else { // Generic cluster (though should be covered by above)
+              tooltipContent = `
+                <strong>Cluster: ${d.name ?? 'N/A'}</strong><br>
+                Total Items: ${d.count ?? 'N/A'}<br>
+                Description: ${d.description || 'No short description available.'}
+              `;
+            }
+          } else { // Individual node
+            tooltipContent = `
+              <strong>${d.name ?? 'N/A'}</strong><br>
+              Year of Origin: ${d.year ?? 'N/A'}<br>
+              Category: ${d.category ?? 'N/A'}<br>
+              Short Description: ${d.description || 'No short description available.'}
+            `;
+          }
+          tooltip.value.innerHTML = tooltipContent;
           tooltip.value.style.opacity = '0.9'; // Make tooltip visible.
           // Position tooltip near the mouse cursor.
           tooltip.value.style.left = `${event.pageX + 15}px`;

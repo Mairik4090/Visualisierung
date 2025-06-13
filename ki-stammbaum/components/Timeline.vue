@@ -17,6 +17,26 @@
   import * as d3 from 'd3';
   import type { Node } from '@/types/concept';
 
+  // Timeline-specific zoom thresholds
+  const TIMELINE_CLUSTER_THRESHOLD_DECADE = 1.2; // Below this, cluster by decade
+  const TIMELINE_CLUSTER_THRESHOLD_YEAR = 2.0;   // Below this (and above DECADE), cluster by year and category
+
+  // Interface for items displayed on the timeline (can be original nodes or clusters)
+  interface TimelineDisplayItem extends Partial<Node> { // Use Partial<Node> to allow overriding/adding properties
+    id: string; // Required: Can be original node ID or generated cluster ID
+    year: number; // Required: Original year or representative year for the cluster
+    category: string; // Required: Original category or representative/generic category for cluster
+    isCluster: boolean;
+    count?: number; // Number of original nodes it represents (1 if not a cluster)
+    childNodes?: Node[]; // Array of original nodes if it's a cluster
+    name?: string; // Optional: Cluster name or original node name
+    description?: string; // Optional: Cluster description or original node description
+    categoriesInCluster?: string[]; // For decade clusters
+    categoryColorsInCluster?: string[]; // For decade clusters
+    // Add any other properties from Node that are needed, or specific cluster properties
+  }
+
+
   /**
    * Timeline-Komponente: gestapelte Balken pro Kategorie, Zoom/Pan auf X-Achse.
    * Emits:
@@ -40,10 +60,10 @@
   // Events Definition
   const emit = defineEmits<{
     (e: 'rangeChanged', range: [number, number]): void;
-    (e: 'nodeClickedInTimeline', node: Node): void;
+    (e: 'nodeClickedInTimeline', node: TimelineDisplayItem): void; // Updated to TimelineDisplayItem
     (
       e: 'nodeHoveredInTimeline',
-      payload: { node: Node; event: MouseEvent } | null,
+      payload: { node: TimelineDisplayItem; event: MouseEvent } | null, // Updated to TimelineDisplayItem
     ): void;
     (e: 'rangeChangeEnd', range: [number, number]): void;
   }>();
@@ -78,6 +98,71 @@
 
     // Angepasste X-Skala basierend auf Zoom-Transform
     const zx = transform.rescaleX(x);
+    const currentZoomLevel = transform.k;
+
+    let displayableTimelineItems: TimelineDisplayItem[] = [];
+
+    // --- START TIMELINE CLUSTERING LOGIC ---
+    if (props.nodes && props.nodes.length > 0) {
+      if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_DECADE) {
+        // Cluster by Decade
+        const decadeBuckets = d3.group(props.nodes, d => Math.floor(d.year / 10) * 10);
+        decadeBuckets.forEach((childNodes, decade) => {
+          const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
+          const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat));
+          displayableTimelineItems.push({
+            id: `timeline-decade-cluster-${decade}`,
+            year: decade, // Representative year (start of decade)
+            category: 'timeline_decade_cluster', // Generic category for these clusters
+            isCluster: true,
+            count: childNodes.length,
+            childNodes: childNodes,
+            name: `${childNodes.length} items (${decade}s)`,
+            description: `Cluster for ${decade}s containing ${childNodes.length} items. Categories: ${categoriesInCluster.join(', ')}`,
+            categoriesInCluster,
+            categoryColorsInCluster,
+          });
+        });
+      } else if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_YEAR) {
+        // Cluster by Year and Category
+        const yearCategoryBuckets = d3.group(props.nodes, d => d.year, d => d.category);
+        yearCategoryBuckets.forEach((categoriesInYear, year) => {
+          categoriesInYear.forEach((childNodes, category) => {
+            if (childNodes.length > 1) { // Only cluster if more than one item
+              displayableTimelineItems.push({
+                id: `timeline-year-cat-cluster-${year}-${category}`,
+                year: year,
+                category: category,
+                isCluster: true,
+                count: childNodes.length,
+                childNodes: childNodes,
+                name: `${childNodes.length} ${category} (${year})`,
+                description: `Cluster of ${childNodes.length} ${category} items for ${year}`,
+              });
+            } else {
+              // Push single nodes as individual items
+              childNodes.forEach(node => {
+                displayableTimelineItems.push({
+                  ...node,
+                  isCluster: false,
+                  count: 1,
+                });
+              });
+            }
+          });
+        });
+      } else {
+        // Show Individual Nodes (highest zoom level)
+        props.nodes.forEach(node => {
+          displayableTimelineItems.push({
+            ...node,
+            isCluster: false,
+            count: 1,
+          });
+        });
+      }
+    }
+    // --- END TIMELINE CLUSTERING LOGIC ---
 
     // Konstante für Balken-Dimensionen
     const barWidth = 5;
@@ -86,30 +171,38 @@
     // Knoten mit D3 Data Join Pattern zeichnen
     nodesGroup
       .selectAll('rect')
-      .data(props.nodes, (d: any) => d.id) // Eindeutige ID als Schlüssel
+      .data(displayableTimelineItems, (d: any) => d.id) // Eindeutige ID als Schlüssel
       .join(
         // Enter: Neue Knoten hinzufügen
         (enter) =>
           enter
             .append('rect')
-            .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
+            .attr('x', (d: TimelineDisplayItem) => zx(d.year) - barWidth / 2)
             .attr('y', y(0) - barHeight / 2)
             .attr('width', barWidth)
             .attr('height', barHeight)
             .style('opacity', 0) // Startet transparent
-            .attr('fill', (d: Node) => color(d.category))
-            .attr('stroke', (d: Node) =>
+            .attr('fill', (d: TimelineDisplayItem) => {
+              if (d.isCluster) {
+                if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                  return d.categoryColorsInCluster[0]; // Use first color for decade cluster
+                }
+                return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555'; // Darker for other clusters
+              }
+              return color(d.category);
+            })
+            .attr('stroke', (d: TimelineDisplayItem) =>
               d.id === props.highlightNodeId ? 'black' : color(d.category),
             )
-            .attr('stroke-width', (d: Node) =>
+            .attr('stroke-width', (d: TimelineDisplayItem) =>
               d.id === props.highlightNodeId ? 2 : 1,
             )
             .style('cursor', 'pointer')
             // Event Handler für Interaktionen
-            .on('click', (event: MouseEvent, d: Node) => {
+            .on('click', (event: MouseEvent, d: TimelineDisplayItem) => { // d is now TimelineDisplayItem
               emit('nodeClickedInTimeline', d);
             })
-            .on('mouseover', (event: MouseEvent, d: Node) => {
+            .on('mouseover', (event: MouseEvent, d: TimelineDisplayItem) => { // d is now TimelineDisplayItem
               emit('nodeHoveredInTimeline', { node: d, event });
             })
             .on('mouseout', () => {
@@ -126,12 +219,20 @@
             update
               .transition()
               .duration(300)
-              .attr('x', (d: Node) => zx(d.year) - barWidth / 2)
-              .attr('fill', (d: Node) => color(d.category))
-              .attr('stroke', (d: Node) =>
+              .attr('x', (d: TimelineDisplayItem) => zx(d.year) - barWidth / 2)
+              .attr('fill', (d: TimelineDisplayItem) => {
+                if (d.isCluster) {
+                  if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                    return d.categoryColorsInCluster[0];
+                  }
+                  return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555';
+                }
+                return color(d.category);
+              })
+              .attr('stroke', (d: TimelineDisplayItem) =>
                 d.id === props.highlightNodeId ? 'black' : color(d.category),
               )
-              .attr('stroke-width', (d: Node) =>
+              .attr('stroke-width', (d: TimelineDisplayItem) =>
                 d.id === props.highlightNodeId ? 2 : 1,
               ),
           ),
@@ -287,70 +388,70 @@
    * When `externalRange` is updated (e.g., by the main KiStammbaum view),
    * this watcher adjusts the timeline's zoom and pan to match the new visible year range.
    */
-  watch(() => props.externalRange, (newRange) => {
-    // Ensure all necessary D3 objects and the new range are valid.
-    if (newRange && newRange.length === 2 && svg.value && zoomBehavior && x) {
-      const [minExt, maxExt] = newRange;
-
-      // Get the current visible domain of the timeline based on its own D3 zoom transform.
-      const currentTransform = d3.zoomTransform(svg.value);
-      const currentVisibleDomain = currentTransform.rescaleX(x).domain();
-
-      // Optimization: If the new external range is already very close to the current visible range,
-      // skip the update to prevent minor oscillations or redundant calculations.
-      if (Math.abs(currentVisibleDomain[0] - minExt) < 1 && Math.abs(currentVisibleDomain[1] - maxExt) < 1 && currentVisibleDomain[0] <= currentVisibleDomain[1]) {
-        return;
-      }
-      // Ignore invalid ranges where min year is greater than or equal to max year.
-      if (minExt >= maxExt) {
-        return;
-      }
-
-      // Set the flag to indicate that the upcoming zoom event is programmatic.
-      // This prevents the 'zoom' event handler from emitting 'rangeChanged', avoiding a feedback loop.
-      isProgrammaticZoom = true;
-
-      // Get the pixel range of the x-axis (drawing area for the timeline).
-      const [rangeStart, rangeEnd] = x.range();
-      const effectiveWidth = rangeEnd - rangeStart; // The actual width available for rendering the domain.
-
-      // Calculate the new scale factor (k) required to fit the externalRange into the effectiveWidth.
-      // targetDomainSpanInPixels is how wide the externalRange (maxExt - minExt years) would be
-      // in pixels if drawn with the original, unzoomed x-scale.
-      const targetDomainSpanInPixels = x(maxExt) - x(minExt);
-
-      let newScale = currentTransform.k; // Default to current scale if calculation is problematic.
-      if (targetDomainSpanInPixels > 0 && effectiveWidth > 0) {
-         newScale = effectiveWidth / targetDomainSpanInPixels;
-      } else if (effectiveWidth === 0 && targetDomainSpanInPixels === 0) { // Both are zero, e.g. no width and no domain
-         newScale = currentTransform.k || 1; // Keep current or default to 1
-      } else if (targetDomainSpanInPixels === 0) { // Trying to show a zero-width domain (e.g. single year)
-        newScale = zoomBehavior.scaleExtent()[1]; // Use max zoom to "zoom in" maximally
-      }
-
-      // Calculate the translation (tx) required for the x-axis.
-      // The D3 zoom transform is such that: new_x_coord = original_x_coord * scale + translate.
-      // We want the `minExt` year, when scaled, to appear at `rangeStart` (left edge of drawing area).
-      // So, x(minExt) * newScale + targetTranslateX = rangeStart.
-      // targetTranslateX = rangeStart - (x(minExt) * newScale).
-      const targetTranslateX = rangeStart - (x(minExt) * newScale);
-
-      // Ensure the calculated scale is within the allowed min/max zoom levels.
-      const [minZoom, maxZoom] = zoomBehavior.scaleExtent();
-      const clampedScale = Math.max(minZoom, Math.min(maxZoom, newScale));
-
-      // Construct the new D3 zoom transform.
-      const newTransform = d3.zoomIdentity.translate(targetTranslateX, 0).scale(clampedScale);
-
-      // Apply the new transform to the SVG element, triggering a D3 zoom event.
-      // A short transition is used for smoothness.
-      d3.select(svg.value)
-        .transition()
-        .duration(isProgrammaticZoom ? 250 : 0) // Use a short duration for programmatic zoom.
-        .call(zoomBehavior.transform as any, newTransform);
-        // The `isProgrammaticZoom` flag will be reset in the 'end' event of this zoom action.
-    }
-  }, { deep: true });
+  // watch(() => props.externalRange, (newRange) => {
+  //   // Ensure all necessary D3 objects and the new range are valid.
+  //   if (newRange && newRange.length === 2 && svg.value && zoomBehavior && x) {
+  //     const [minExt, maxExt] = newRange;
+  //
+  //     // Get the current visible domain of the timeline based on its own D3 zoom transform.
+  //     const currentTransform = d3.zoomTransform(svg.value);
+  //     const currentVisibleDomain = currentTransform.rescaleX(x).domain();
+  //
+  //     // Optimization: If the new external range is already very close to the current visible range,
+  //     // skip the update to prevent minor oscillations or redundant calculations.
+  //     if (Math.abs(currentVisibleDomain[0] - minExt) < 1 && Math.abs(currentVisibleDomain[1] - maxExt) < 1 && currentVisibleDomain[0] <= currentVisibleDomain[1]) {
+  //       return;
+  //     }
+  //     // Ignore invalid ranges where min year is greater than or equal to max year.
+  //     if (minExt >= maxExt) {
+  //       return;
+  //     }
+  //
+  //     // Set the flag to indicate that the upcoming zoom event is programmatic.
+  //     // This prevents the 'zoom' event handler from emitting 'rangeChanged', avoiding a feedback loop.
+  //     isProgrammaticZoom = true;
+  //
+  //     // Get the pixel range of the x-axis (drawing area for the timeline).
+  //     const [rangeStart, rangeEnd] = x.range();
+  //     const effectiveWidth = rangeEnd - rangeStart; // The actual width available for rendering the domain.
+  //
+  //     // Calculate the new scale factor (k) required to fit the externalRange into the effectiveWidth.
+  //     // targetDomainSpanInPixels is how wide the externalRange (maxExt - minExt years) would be
+  //     // in pixels if drawn with the original, unzoomed x-scale.
+  //     const targetDomainSpanInPixels = x(maxExt) - x(minExt);
+  //
+  //     let newScale = currentTransform.k; // Default to current scale if calculation is problematic.
+  //     if (targetDomainSpanInPixels > 0 && effectiveWidth > 0) {
+  //        newScale = effectiveWidth / targetDomainSpanInPixels;
+  //     } else if (effectiveWidth === 0 && targetDomainSpanInPixels === 0) { // Both are zero, e.g. no width and no domain
+  //        newScale = currentTransform.k || 1; // Keep current or default to 1
+  //     } else if (targetDomainSpanInPixels === 0) { // Trying to show a zero-width domain (e.g. single year)
+  //       newScale = zoomBehavior.scaleExtent()[1]; // Use max zoom to "zoom in" maximally
+  //     }
+  //
+  //     // Calculate the translation (tx) required for the x-axis.
+  //     // The D3 zoom transform is such that: new_x_coord = original_x_coord * scale + translate.
+  //     // We want the `minExt` year, when scaled, to appear at `rangeStart` (left edge of drawing area).
+  //     // So, x(minExt) * newScale + targetTranslateX = rangeStart.
+  //     // targetTranslateX = rangeStart - (x(minExt) * newScale).
+  //     const targetTranslateX = rangeStart - (x(minExt) * newScale);
+  //
+  //     // Ensure the calculated scale is within the allowed min/max zoom levels.
+  //     const [minZoom, maxZoom] = zoomBehavior.scaleExtent();
+  //     const clampedScale = Math.max(minZoom, Math.min(maxZoom, newScale));
+  //
+  //     // Construct the new D3 zoom transform.
+  //     const newTransform = d3.zoomIdentity.translate(targetTranslateX, 0).scale(clampedScale);
+  //
+  //     // Apply the new transform to the SVG element, triggering a D3 zoom event.
+  //     // A short transition is used for smoothness.
+  //     d3.select(svg.value)
+  //       .transition()
+  //       .duration(isProgrammaticZoom ? 250 : 0) // Use a short duration for programmatic zoom.
+  //       .call(zoomBehavior.transform as any, newTransform);
+  //       // The `isProgrammaticZoom` flag will be reset in the 'end' event of this zoom action.
+  //   }
+  // }, { deep: true });
 </script>
 
 <style scoped>
