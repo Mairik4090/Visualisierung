@@ -30,6 +30,11 @@
   const props = defineProps({
     nodes: { type: Array as PropType<Node[]>, required: true },
     highlightNodeId: { type: String as PropType<string | null>, default: null },
+    /**
+     * An external year range [minYear, maxYear] that the timeline should synchronize its view to.
+     * Typically received from the main KiStammbaum view's zoom/pan events.
+     */
+    externalRange: { type: Array as PropType<[number, number] | null>, default: null },
   });
 
   // Events Definition
@@ -46,6 +51,12 @@
   // Reactive References
   const svg = ref<SVGSVGElement | null>(null);
   const zoomScale = ref(1); // Zoom-Level für Debugging und externe Kontrolle
+  /**
+   * Flag to indicate if a zoom event was triggered programmatically (e.g., by the externalRange watcher).
+   * This helps prevent feedback loops where a programmatic zoom change would emit 'rangeChanged',
+   * which might then cause the parent to update externalRange again.
+   */
+  let isProgrammaticZoom = false;
 
   // D3 Skalen und Variablen
   let minYear = 0;
@@ -136,7 +147,9 @@
     axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
 
     // Bereichsänderung emit
-    emit('rangeChanged', zx.domain() as [number, number]);
+    if (!isProgrammaticZoom) { // Only emit if not caused by externalRange sync
+      emit('rangeChanged', zx.domain() as [number, number]);
+    }
   }
 
   /**
@@ -201,10 +214,19 @@
       // Zoom Event Handler
       .on('zoom', (ev) => {
         zoomScale.value = ev.transform.k;
-        draw(ev.transform);
+        draw(ev.transform); // This already emits 'rangeChanged'
+        // If zoom was user-initiated on timeline, clear externalRange to allow independent control again (optional)
+        // For now, let's assume externalRange takes precedence if provided.
       })
       // Zoom End Event Handler
       .on('end', (ev) => {
+        if (isProgrammaticZoom) {
+          isProgrammaticZoom = false; // Reset flag
+          // Potentially emit final range only if it was a user drag on timeline itself
+          const finalXScale = ev.transform.rescaleX(x);
+          emit('rangeChangeEnd', finalXScale.domain() as [number, number]);
+          return;
+        }
         const finalXScale = ev.transform.rescaleX(x);
         emit('rangeChangeEnd', finalXScale.domain() as [number, number]);
       });
@@ -259,6 +281,76 @@
     },
     { deep: true },
   );
+
+  /**
+   * Watches for changes in the `externalRange` prop.
+   * When `externalRange` is updated (e.g., by the main KiStammbaum view),
+   * this watcher adjusts the timeline's zoom and pan to match the new visible year range.
+   */
+  watch(() => props.externalRange, (newRange) => {
+    // Ensure all necessary D3 objects and the new range are valid.
+    if (newRange && newRange.length === 2 && svg.value && zoomBehavior && x) {
+      const [minExt, maxExt] = newRange;
+
+      // Get the current visible domain of the timeline based on its own D3 zoom transform.
+      const currentTransform = d3.zoomTransform(svg.value);
+      const currentVisibleDomain = currentTransform.rescaleX(x).domain();
+
+      // Optimization: If the new external range is already very close to the current visible range,
+      // skip the update to prevent minor oscillations or redundant calculations.
+      if (Math.abs(currentVisibleDomain[0] - minExt) < 1 && Math.abs(currentVisibleDomain[1] - maxExt) < 1 && currentVisibleDomain[0] <= currentVisibleDomain[1]) {
+        return;
+      }
+      // Ignore invalid ranges where min year is greater than or equal to max year.
+      if (minExt >= maxExt) {
+        return;
+      }
+
+      // Set the flag to indicate that the upcoming zoom event is programmatic.
+      // This prevents the 'zoom' event handler from emitting 'rangeChanged', avoiding a feedback loop.
+      isProgrammaticZoom = true;
+
+      // Get the pixel range of the x-axis (drawing area for the timeline).
+      const [rangeStart, rangeEnd] = x.range();
+      const effectiveWidth = rangeEnd - rangeStart; // The actual width available for rendering the domain.
+
+      // Calculate the new scale factor (k) required to fit the externalRange into the effectiveWidth.
+      // targetDomainSpanInPixels is how wide the externalRange (maxExt - minExt years) would be
+      // in pixels if drawn with the original, unzoomed x-scale.
+      const targetDomainSpanInPixels = x(maxExt) - x(minExt);
+
+      let newScale = currentTransform.k; // Default to current scale if calculation is problematic.
+      if (targetDomainSpanInPixels > 0 && effectiveWidth > 0) {
+         newScale = effectiveWidth / targetDomainSpanInPixels;
+      } else if (effectiveWidth === 0 && targetDomainSpanInPixels === 0) { // Both are zero, e.g. no width and no domain
+         newScale = currentTransform.k || 1; // Keep current or default to 1
+      } else if (targetDomainSpanInPixels === 0) { // Trying to show a zero-width domain (e.g. single year)
+        newScale = zoomBehavior.scaleExtent()[1]; // Use max zoom to "zoom in" maximally
+      }
+
+      // Calculate the translation (tx) required for the x-axis.
+      // The D3 zoom transform is such that: new_x_coord = original_x_coord * scale + translate.
+      // We want the `minExt` year, when scaled, to appear at `rangeStart` (left edge of drawing area).
+      // So, x(minExt) * newScale + targetTranslateX = rangeStart.
+      // targetTranslateX = rangeStart - (x(minExt) * newScale).
+      const targetTranslateX = rangeStart - (x(minExt) * newScale);
+
+      // Ensure the calculated scale is within the allowed min/max zoom levels.
+      const [minZoom, maxZoom] = zoomBehavior.scaleExtent();
+      const clampedScale = Math.max(minZoom, Math.min(maxZoom, newScale));
+
+      // Construct the new D3 zoom transform.
+      const newTransform = d3.zoomIdentity.translate(targetTranslateX, 0).scale(clampedScale);
+
+      // Apply the new transform to the SVG element, triggering a D3 zoom event.
+      // A short transition is used for smoothness.
+      d3.select(svg.value)
+        .transition()
+        .duration(isProgrammaticZoom ? 250 : 0) // Use a short duration for programmatic zoom.
+        .call(zoomBehavior.transform as any, newTransform);
+        // The `isProgrammaticZoom` flag will be reset in the 'end' event of this zoom action.
+    }
+  }, { deep: true });
 </script>
 
 <style scoped>

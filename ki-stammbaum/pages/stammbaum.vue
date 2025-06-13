@@ -13,6 +13,7 @@
       @node-clicked-in-timeline="handleNodeClickedInTimeline"
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
       :highlight-node-id="overallHoveredNodeId"
+      :external-range="mainViewVisibleRange"
     />
 
     <div
@@ -40,6 +41,7 @@
       @node-hovered="handleNodeHoveredInTree"
       :highlight-node-id="overallHoveredNodeId"
       :selected-node-id="selected?.id" <!-- Pass the ID of the selected concept for highlighting in KiStammbaum -->
+      @main-view-range-changed="handleMainViewRangeChange"
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
@@ -87,6 +89,7 @@
 
   /** Shared hover state for cross-component highlighting */
   const overallHoveredNodeId = ref<string | null>(null);
+  const mainViewVisibleRange = ref<[number, number] | null>(null);
 
   /** Legenden-Daten: Kategorien mit Farben aus D3-Scheme */
   const legendCategories = computed(() => {
@@ -156,6 +159,10 @@
   /** Handler for node hover events from KiStammbaum.vue */
   function handleNodeHoveredInTree(nodeId: string | null) {
     overallHoveredNodeId.value = nodeId;
+  }
+
+  function handleMainViewRangeChange(range: [number, number]) {
+    mainViewVisibleRange.value = range;
   }
 
   const yearFocusWindowSpan = 10;
