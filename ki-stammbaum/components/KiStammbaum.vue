@@ -82,6 +82,7 @@
   const container = ref<HTMLElement | null>(null);
   const tooltip = ref<HTMLElement | null>(null); // Tooltip element reference
   let resizeObserver: ResizeObserver | null = null;
+  let lastRenderedYearRange: [number, number] | null = null;
 
   /** Aktuelle D3-Simulation zur späteren Bereinigung */
   let simulation: d3.Simulation<GraphNode, Link> | null = null; // Updated Link type
@@ -917,6 +918,9 @@
   // Initial render on mount.
   onMounted(() => {
     render();
+    if (props.currentYearRange) {
+      lastRenderedYearRange = [...props.currentYearRange];
+    }
     // Set up a resize observer to re-render the graph if the container size changes.
     resizeObserver = new ResizeObserver(() => render());
     if (container.value) resizeObserver.observe(container.value);
@@ -942,7 +946,21 @@
   );
 
   // Watch for changes in currentYearRange (e.g., from timeline) and re-render.
-  watch(() => props.currentYearRange, render, { deep: true });
+  watch(
+    () => props.currentYearRange,
+    (newRange) => {
+      if (
+        newRange &&
+        (!lastRenderedYearRange ||
+          newRange[0] !== lastRenderedYearRange[0] ||
+          newRange[1] !== lastRenderedYearRange[1])
+      ) {
+        lastRenderedYearRange = [...newRange];
+        render();
+      }
+    },
+    { deep: true },
+  );
 
   /**
    * Zooms and pans the view to fit the bounds of a given cluster's child nodes.
