@@ -53,6 +53,8 @@
     y?: number; // Current y position
     fx?: number | null; // Fixed x position (for physics)
     fy?: number | null; // Fixed y position (for physics)
+    previous_x?: number;
+    previous_y?: number;
     isCluster?: boolean; // True if this node represents a cluster
     count?: number; // Number of original nodes it represents (1 if not a cluster)
     childNodes?: Node[]; // Array of original nodes if it's a cluster
@@ -93,6 +95,7 @@
   let simulation: d3.Simulation<GraphNode, Link> | null = null; // Updated Link type
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
   let lastTransform: d3.ZoomTransform = d3.zoomIdentity;
+  let previousFrameClusterInfo = new Map<string, { x: number, y: number, childNodeOriginalIds: string[] }>();
 
   const userPositionedNodes = ref<Map<string, { fy: number }>>(new Map());
 
@@ -193,6 +196,7 @@
   const debouncedProcessZoom = debounce(processZoomLogic, 250);
 
   function render(): void {
+    const currentFrameClusterInfo = new Map<string, { x: number, y: number, childNodeOriginalIds: string[] }>();
     if (!svg.value || !props.nodes || props.nodes.length === 0) return;
     simulation?.stop(); // Stop any ongoing simulation before re-rendering
 
@@ -360,31 +364,47 @@
             } else {
               // Single node in this group, push individually
               originalNodesInGroup.forEach((originalNode) => {
-                const userSetFy = userPositionedNodes.value.get(
-                  originalNode.id,
-                )?.fy;
-                displayNodes.push({
-                  ...originalNode,
-                  isCluster: false,
-                  count: 1,
-                  fx: null,
-                  fy: userSetFy ?? null,
-                });
+                const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
+                const individualGraphNode: GraphNode = {
+                    ...originalNode,
+                    isCluster: false,
+                    count: 1,
+                    fx: null,
+                    fy: userSetFy ?? null,
+                };
+                // Check and assign previous_x, previous_y
+                for (const prevClusterData of previousFrameClusterInfo.values()) {
+                    if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
+                    individualGraphNode.previous_x = prevClusterData.x;
+                    individualGraphNode.previous_y = prevClusterData.y;
+                    break;
+                    }
+                }
+                displayNodes.push(individualGraphNode);
               });
             }
           });
         });
         // Highest Zoom: Show individual nodes
-      } else {
+      } else { // Highest Zoom logic
         filteredNodes.forEach((originalNode) => {
           const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
-          displayNodes.push({
+          const individualGraphNode: GraphNode = {
             ...originalNode,
             isCluster: false,
             count: 1,
-            fx: null, // fx will be set by physics if enabled
+            fx: null,
             fy: userSetFy ?? null,
-          });
+          };
+          // Check and assign previous_x, previous_y
+          for (const prevClusterData of previousFrameClusterInfo.values()) {
+            if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
+              individualGraphNode.previous_x = prevClusterData.x;
+              individualGraphNode.previous_y = prevClusterData.y;
+              break;
+            }
+          }
+          displayNodes.push(individualGraphNode);
         });
       }
     }
@@ -399,11 +419,11 @@
     // Y-axis scale: maps categories to vertical positions.
     // Using a point scale for discrete categories.
     const categoriesForScale = Array.from(
-      new Set(displayNodes.map((d: GraphNode) => d.category)),
+      new Set(filteredNodes.map((n) => n.category)),
     );
     yScale = d3
       .scalePoint<string>()
-      .domain(categoriesForScale)
+      .domain(categoriesForScale.length > 0 ? categoriesForScale : ['default_category_for_empty_scale'])
       .range([40, height - 40]); // Padding from top/bottom edges.
 
     // Initialize node positions (x, y) based on their year and category.
@@ -702,6 +722,8 @@
         }
       });
 
+    nodeEnter.attr('cx', d => d.previous_x ?? d.x).attr('cy', d => d.previous_y ?? d.y);
+
     // Merge enter and update selections for nodes.
     const nodeUpdateAndEnter = nodeEnter.merge(nodeSelection);
 
@@ -818,6 +840,16 @@
         .attr('x2', (d: any) => (d.target as GraphNode).x!) // Link end x.
         .attr('y2', (d: any) => (d.target as GraphNode).y!) // Link end y.
         .attr('stroke-opacity', 0.6);
+
+      displayNodes.forEach(d => {
+        if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
+          currentFrameClusterInfo.set(d.id, {
+            x: d.x,
+            y: d.y,
+            childNodeOriginalIds: d.childNodes.map(cn => cn.id)
+          });
+        }
+      });
     }
 
     // `ticked` function: Called on each step of the physics simulation.
@@ -834,6 +866,17 @@
       labelUpdateAndEnter // Update label positions.
         .attr('x', (d: any) => (d as GraphNode).x!)
         .attr('y', (d: any) => ((d as GraphNode).y ?? 0) - 12); // Keep label above node.
+
+      nodeUpdateAndEnter.each(function(dNode) { // Use .each to access the data object dNode
+        const d = dNode as GraphNode; // Cast to GraphNode
+        if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
+          currentFrameClusterInfo.set(d.id, {
+            x: d.x,
+            y: d.y,
+            childNodeOriginalIds: d.childNodes.map(cn => cn.id)
+          });
+        }
+      });
     }
 
     // --- D3 Drag Event Handlers ---
@@ -960,6 +1003,7 @@
         }
       }
     }
+    previousFrameClusterInfo = new Map(currentFrameClusterInfo);
   }
 
   // Initial render on mount.
