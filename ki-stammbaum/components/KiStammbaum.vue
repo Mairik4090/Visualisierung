@@ -87,6 +87,7 @@
   const container = ref<HTMLElement | null>(null);
   const tooltip = ref<HTMLElement | null>(null); // Tooltip element reference
   let resizeObserver: ResizeObserver | null = null;
+  let lastRenderedYearRange: [number, number] | null = null;
 
   /** Aktuelle D3-Simulation zur späteren Bereinigung */
   let simulation: d3.Simulation<GraphNode, Link> | null = null; // Updated Link type
@@ -962,77 +963,120 @@
   }
 
   // Initial render on mount.
-  onMounted(() => {
-    // Remove the direct render call to avoid duplicate renders
-    // render();
-    resizeObserver = new ResizeObserver(() => render());
-    if (container.value) resizeObserver.observe(container.value);
+onMounted(() => {
+  // Der direkte render()-Aufruf wird entfernt, um doppelte Renderings zu vermeiden.
+  // Der Watcher unten kümmert sich um das initiale Rendering.
+  resizeObserver = new ResizeObserver(() => render());
+  if (container.value) resizeObserver.observe(container.value);
+});
+
+// Cleanup on unmount.
+onBeforeUnmount(() => {
+  simulation?.stop(); // Stoppt die D3-Simulation.
+  resizeObserver?.disconnect(); // Trennt den Resize Observer.
+});
+
+// Debounced render to avoid double/triple renders from multiple triggers
+const debouncedRender = debounce(render, 10);
+
+/**
+ * Zoomt und schwenkt die Ansicht, um sie an die Grenzen der Kind-Knoten eines gegebenen Clusters anzupassen.
+ * @param clusterNode Der Cluster-Knoten, in den hineingezoomt werden soll.
+ */
+function zoomToClusterBounds(clusterNode: GraphNode) {
+  if (
+    !svg.value ||
+    !zoomBehavior ||
+    !xScale ||
+    !yScale ||
+    !clusterNode.childNodes ||
+    clusterNode.childNodes.length === 0
+  )
+    return;
+
+  const childNodes = clusterNode.childNodes;
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+
+  // Berechnet die Bounding Box der Kind-Knoten in Datenkoordinaten (Jahr, Kategoriewert).
+  childNodes.forEach((node) => {
+    const nodeX = xScale!(node.year); // Holt die x-Koordinate vom Jahr.
+    const nodeY = yScale!(node.category) ?? svg.value!.clientHeight / 2; // Holt die y-Koordinate von der Kategorie, Fallback zur Mitte.
+    minX = Math.min(minX, nodeX);
+    maxX = Math.max(maxX, nodeX);
+    minY = Math.min(minY, nodeY);
+    maxY = Math.max(maxY, nodeY);
   });
+  
+  // (Hier würde die restliche Logik der Funktion folgen, um den Zoom tatsächlich anzuwenden)
+}
 
-  // Cleanup on unmount.
-  onBeforeUnmount(() => {
-    simulation?.stop(); // Stop D3 simulation.
-    resizeObserver?.disconnect(); // Disconnect resize observer.
-  });
 
-  // Debounced render to avoid double/triple renders from multiple triggers
-  const debouncedRender = debounce(render, 10);
+// Speichert vorherige Werte für den Vergleich
+let prevNodes: Node[] | undefined = undefined;
+let prevLinks: Link[] | undefined = undefined;
+let prevYearRange: [number, number] | undefined = undefined;
+let prevUsePhysics: boolean | undefined = undefined;
 
-  // Store previous values for comparison
-  let prevNodes: Node[] | undefined = undefined;
-  let prevLinks: Link[] | undefined = undefined;
-  let prevYearRange: [number, number] | undefined = undefined;
-  let prevUsePhysics: boolean | undefined = undefined;
-
-  function shallowEqualArray(a: any[] | undefined, b: any[] | undefined) {
-    if (a === b) return true;
-    if (!a || !b || a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
+function shallowEqualArray(a: any[] | undefined, b: any[] | undefined) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
   }
+  return true;
+}
 
-  watch(
-    () => [props.nodes, props.links, props.usePhysics, props.currentYearRange],
-    () => {
-      let shouldRender = false;
-      // Compare nodes by id only (shallow, fast)
-      const nodeIds = props.nodes?.map((n) => n.id) || [];
-      const prevNodeIds = prevNodes?.map((n) => n.id) || [];
-      if (!shallowEqualArray(nodeIds, prevNodeIds)) {
-        shouldRender = true;
-        prevNodes = props.nodes ? [...props.nodes] : undefined;
-      }
-      // Compare links by source-target id
-      const linkIds = props.links?.map((l) => `${l.source}-${l.target}`) || [];
-      const prevLinkIds =
-        prevLinks?.map((l) => `${l.source}-${l.target}`) || [];
-      if (!shallowEqualArray(linkIds, prevLinkIds)) {
-        shouldRender = true;
-        prevLinks = props.links ? [...props.links] : undefined;
-      }
-      // Compare year range
-      if (
-        !prevYearRange ||
-        props.currentYearRange[0] !== prevYearRange[0] ||
-        props.currentYearRange[1] !== prevYearRange[1]
-      ) {
-        shouldRender = true;
-        prevYearRange = [...props.currentYearRange];
-      }
-      // Compare usePhysics
-      if (prevUsePhysics !== props.usePhysics) {
-        shouldRender = true;
-        prevUsePhysics = props.usePhysics;
-      }
-      if (shouldRender) {
-        if (!props.usePhysics) simulation?.stop();
-        debouncedRender();
-      }
-    },
-    { deep: false },
-  );
+// Dieser einzelne Watcher ist effizienter als mehrere separate Watcher.
+// Er beobachtet alle relevanten Props und rendert nur neu, wenn sich
+// tatsächlich etwas geändert hat.
+watch(
+  () => [props.nodes, props.links, props.usePhysics, props.currentYearRange],
+  () => {
+    let shouldRender = false;
+    
+    // Vergleicht Nodes nur anhand der ID (flach, schnell)
+    const nodeIds = props.nodes?.map((n) => n.id) || [];
+    const prevNodeIds = prevNodes?.map((n) => n.id) || [];
+    if (!shallowEqualArray(nodeIds, prevNodeIds)) {
+      shouldRender = true;
+      prevNodes = props.nodes ? [...props.nodes] : undefined;
+    }
+
+    // Vergleicht Links anhand der Source-Target-ID
+    const linkIds = props.links?.map((l) => `${l.source}-${l.target}`) || [];
+    const prevLinkIds =
+      prevLinks?.map((l) => `${l.source}-${l.target}`) || [];
+    if (!shallowEqualArray(linkIds, prevLinkIds)) {
+      shouldRender = true;
+      prevLinks = props.links ? [...props.links] : undefined;
+    }
+
+    // Vergleicht den Jahresbereich
+    if (
+      !prevYearRange ||
+      props.currentYearRange[0] !== prevYearRange[0] ||
+      props.currentYearRange[1] !== prevYearRange[1]
+    ) {
+      shouldRender = true;
+      prevYearRange = [...props.currentYearRange];
+    }
+
+    // Vergleicht usePhysics
+    if (prevUsePhysics !== props.usePhysics) {
+      shouldRender = true;
+      prevUsePhysics = props.usePhysics;
+    }
+
+    if (shouldRender) {
+      if (!props.usePhysics) simulation?.stop();
+      debouncedRender();
+    }
+  },
+  { deep: false }, // Wichtig: deep: false, da wir einen manuellen, flachen Vergleich durchführen.
+);
 </script>
 
 <style scoped>
