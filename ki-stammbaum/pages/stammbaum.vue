@@ -44,10 +44,13 @@
       :target-zoom-level="pageCurrentZoomLevel"
     />
 
-    <ConceptDetail :concept="selected" @close="selected = null" />
+    <ConceptDetail :concept="selectedToConcept" @close="selected = null" />
     <Legend :categories="legendCategories" />
     <FilterControls @filters-applied="onFilters" />
-    <ZoomControls :current-level="pageCurrentZoomLevel" @update:current-level="pageCurrentZoomLevel = $event" />
+    <ZoomControls
+      :current-level="pageCurrentZoomLevel"
+      @update:current-level="pageCurrentZoomLevel = $event"
+    />
   </div>
 </template>
 
@@ -63,8 +66,8 @@
   import Timeline from '@/components/Timeline.vue';
   import ZoomControls from '@/components/ZoomControls.vue'; // Import ZoomControls
   import { useStammbaumData } from '@/composables/useStammbaumData';
-  import { transformToGraph, type Graph } from '@/utils/graph-transform'; // Imported Graph type
-  import type { Node } from '@/types/concept'; // Added Node type import
+  import { transformToGraph } from '@/utils/graph-transform';
+  import type { Node, Concept, Graph } from '@/types/concept'; // Import Graph and Concept from types
 
   // Cache variables
   let previousFiltersSignature: string | null = null;
@@ -152,26 +155,25 @@
   }
 
   /** Handler for node click events from Timeline.vue */
-  function handleNodeClickedInTimeline(node: Node) {
-    // When a node is clicked in the timeline, center the main graph view on that node's year.
-    // We don't select the node here as primary selection happens in the graph itself.
+  function handleNodeClickedInTimeline(node: any) {
+    // Accept TimelineDisplayItem, which may have name as string | undefined
     handleCenterOnYear(node.year);
   }
 
   /** Handler for node hover events from Timeline.vue */
   function handleNodeHoveredInTimeline(
-    payload: { node: Node; event: MouseEvent } | null,
+    payload: { node: any; event: MouseEvent } | null,
   ) {
     if (payload) {
-      hoveredNodeInTimeline.value = payload.node; // For existing tooltip
-      overallHoveredNodeId.value = payload.node.id; // Update shared hover ID
+      hoveredNodeInTimeline.value = payload.node; // Accept TimelineDisplayItem
+      overallHoveredNodeId.value = payload.node.id;
       hoverPreviewPosition.value = {
         x: payload.event.clientX + 10,
         y: payload.event.clientY + 10,
       };
     } else {
       hoveredNodeInTimeline.value = null;
-      overallHoveredNodeId.value = null; // Clear shared hover ID
+      overallHoveredNodeId.value = null;
       hoverPreviewPosition.value = null;
     }
   }
@@ -271,6 +273,26 @@
     },
     { immediate: true },
   );
+
+  // Add computed to convert Node to Concept for ConceptDetail
+  const selectedToConcept = computed<Concept | null>(() => {
+    if (!selected.value) return null;
+    // Ensure all required Concept fields are present, fallback to empty array for dependencies
+    return {
+      id: selected.value.id,
+      name: selected.value.name,
+      year: selected.value.year,
+      description: selected.value.description || '',
+      category: selected.value.category || '',
+      dependencies: (selected.value as any).dependencies || [],
+      contributions: (selected.value as any).contributions,
+      references: (selected.value as any).references,
+      influenced: (selected.value as any).influenced,
+      tags: (selected.value as any).tags,
+      year_of_origin: (selected.value as any).year_of_origin,
+      short_description: (selected.value as any).short_description,
+    };
+  });
 </script>
 
 <style scoped>

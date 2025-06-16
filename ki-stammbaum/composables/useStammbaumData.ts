@@ -28,20 +28,21 @@ async function loadData(): Promise<void> {
   pendingCache.value = true;
   errorCache.value = null;
 
-  const config = useRuntimeConfig();
-  const base = config.app.baseURL || '/';
-  const url = `${base.replace(/\/$/, '')}/data/ki-stammbaum.json`;
-
   try {
-    const result = await $fetch<StammbaumData>(url);
-    dataCache.value = result;
-  } catch (networkErr) {
+    // Load data from local module first
+    const localModule = await import('~/public/data/ki-stammbaum.json');
+    dataCache.value = (localModule.default || localModule) as StammbaumData;
+  } catch (importErr) {
     try {
-      // Fallback auf statischen Import, falls kein Netzwerkzugriff möglich ist
-      const localModule = await import('~/public/data/ki-stammbaum.json');
-      dataCache.value = (localModule.default || localModule) as StammbaumData;
-    } catch (importErr) {
-      errorCache.value = importErr as Error;
+      // Fallback to network fetch if local import fails
+      const config = useRuntimeConfig();
+      const base = config.app.baseURL || '/';
+      const result = await $fetch<StammbaumData>(
+        '/public/data/ki-stammbaum.json',
+      );
+      dataCache.value = result;
+    } catch (networkErr) {
+      errorCache.value = networkErr as Error;
     }
   } finally {
     pendingCache.value = false;

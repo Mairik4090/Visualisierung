@@ -19,10 +19,11 @@
 
   // Timeline-specific zoom thresholds
   const TIMELINE_CLUSTER_THRESHOLD_DECADE = 1.2; // Below this, cluster by decade
-  const TIMELINE_CLUSTER_THRESHOLD_YEAR = 2.0;   // Below this (and above DECADE), cluster by year and category
+  const TIMELINE_CLUSTER_THRESHOLD_YEAR = 2.0; // Below this (and above DECADE), cluster by year and category
 
   // Interface for items displayed on the timeline (can be original nodes or clusters)
-  interface TimelineDisplayItem extends Partial<Node> { // Use Partial<Node> to allow overriding/adding properties
+  interface TimelineDisplayItem extends Partial<Node> {
+    // Use Partial<Node> to allow overriding/adding properties
     id: string; // Required: Can be original node ID or generated cluster ID
     year: number; // Required: Original year or representative year for the cluster
     category: string; // Required: Original category or representative/generic category for cluster
@@ -35,7 +36,6 @@
     categoryColorsInCluster?: string[]; // For decade clusters
     // Add any other properties from Node that are needed, or specific cluster properties
   }
-
 
   /**
    * Timeline-Komponente: gestapelte Balken pro Kategorie, Zoom/Pan auf X-Achse.
@@ -54,7 +54,10 @@
      * An external year range [minYear, maxYear] that the timeline should synchronize its view to.
      * Typically received from the main KiStammbaum view's zoom/pan events.
      */
-    externalRange: { type: Array as PropType<[number, number] | null>, default: null },
+    externalRange: {
+      type: Object as PropType<[number, number] | null>,
+      default: null,
+    },
   });
 
   // Events Definition
@@ -106,10 +109,17 @@
     if (props.nodes && props.nodes.length > 0) {
       if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_DECADE) {
         // Cluster by Decade
-        const decadeBuckets = d3.group(props.nodes, d => Math.floor(d.year / 10) * 10);
+        const decadeBuckets = d3.group(
+          props.nodes,
+          (d) => Math.floor(d.year / 10) * 10,
+        );
         decadeBuckets.forEach((childNodes, decade) => {
-          const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
-          const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat));
+          const categoriesInCluster = Array.from(
+            new Set(childNodes.map((n) => n.category).filter(Boolean)),
+          ) as string[];
+          const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+            color(cat),
+          );
           displayableTimelineItems.push({
             id: `timeline-decade-cluster-${decade}`,
             year: decade, // Representative year (start of decade)
@@ -125,14 +135,19 @@
         });
       } else if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_YEAR) {
         // Cluster by Year and Category
-        const yearCategoryBuckets = d3.group(props.nodes, d => d.year, d => d.category);
+        const yearCategoryBuckets = d3.group(
+          props.nodes,
+          (d) => d.year,
+          (d) => d.category,
+        );
         yearCategoryBuckets.forEach((categoriesInYear, year) => {
           categoriesInYear.forEach((childNodes, category) => {
-            if (childNodes.length > 1) { // Only cluster if more than one item
+            if (childNodes.length > 1) {
+              // Only cluster if more than one item
               displayableTimelineItems.push({
                 id: `timeline-year-cat-cluster-${year}-${category}`,
                 year: year,
-                category: category,
+                category: category || '',
                 isCluster: true,
                 count: childNodes.length,
                 childNodes: childNodes,
@@ -141,9 +156,10 @@
               });
             } else {
               // Push single nodes as individual items
-              childNodes.forEach(node => {
+              childNodes.forEach((node) => {
                 displayableTimelineItems.push({
                   ...node,
+                  category: node.category || '',
                   isCluster: false,
                   count: 1,
                 });
@@ -153,9 +169,10 @@
         });
       } else {
         // Show Individual Nodes (highest zoom level)
-        props.nodes.forEach(node => {
+        props.nodes.forEach((node) => {
           displayableTimelineItems.push({
             ...node,
+            category: node.category || '',
             isCluster: false,
             count: 1,
           });
@@ -184,10 +201,16 @@
             .style('opacity', 0) // Startet transparent
             .attr('fill', (d: TimelineDisplayItem) => {
               if (d.isCluster) {
-                if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                if (
+                  d.category === 'timeline_decade_cluster' &&
+                  d.categoryColorsInCluster &&
+                  d.categoryColorsInCluster.length > 0
+                ) {
                   return d.categoryColorsInCluster[0]; // Use first color for decade cluster
                 }
-                return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555'; // Darker for other clusters
+                return (
+                  d3.color(color(d.category))?.darker(0.5).toString() ?? '#555'
+                ); // Darker for other clusters
               }
               return color(d.category);
             })
@@ -199,10 +222,12 @@
             )
             .style('cursor', 'pointer')
             // Event Handler für Interaktionen
-            .on('click', (event: MouseEvent, d: TimelineDisplayItem) => { // d is now TimelineDisplayItem
+            .on('click', (event: MouseEvent, d: TimelineDisplayItem) => {
+              // d is now TimelineDisplayItem
               emit('nodeClickedInTimeline', d);
             })
-            .on('mouseover', (event: MouseEvent, d: TimelineDisplayItem) => { // d is now TimelineDisplayItem
+            .on('mouseover', (event: MouseEvent, d: TimelineDisplayItem) => {
+              // d is now TimelineDisplayItem
               emit('nodeHoveredInTimeline', { node: d, event });
             })
             .on('mouseout', () => {
@@ -222,10 +247,17 @@
               .attr('x', (d: TimelineDisplayItem) => zx(d.year) - barWidth / 2)
               .attr('fill', (d: TimelineDisplayItem) => {
                 if (d.isCluster) {
-                  if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                  if (
+                    d.category === 'timeline_decade_cluster' &&
+                    d.categoryColorsInCluster &&
+                    d.categoryColorsInCluster.length > 0
+                  ) {
                     return d.categoryColorsInCluster[0];
                   }
-                  return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555';
+                  return (
+                    d3.color(color(d.category))?.darker(0.5).toString() ??
+                    '#555'
+                  );
                 }
                 return color(d.category);
               })
@@ -248,7 +280,8 @@
     axisGroup.call(d3.axisBottom(zx).ticks(5).tickFormat(d3.format('d')));
 
     // Bereichsänderung emit
-    if (!isProgrammaticZoom) { // Only emit if not caused by externalRange sync
+    if (!isProgrammaticZoom) {
+      // Only emit if not caused by externalRange sync
       emit('rangeChanged', zx.domain() as [number, number]);
     }
   }
@@ -260,7 +293,7 @@
     if (!svg.value || !props.nodes.length) return;
 
     // SVG auswählen und leeren
-    const svgSel = d3.select(svg.value);
+    const svgSel = d3.select(svg.value as SVGSVGElement);
     svgSel.selectAll('*').remove();
 
     // Dimensionen und Margins definieren
@@ -279,7 +312,9 @@
     }
 
     // Kategorien extrahieren und Farbskala erstellen
-    categories = Array.from(new Set(props.nodes.map((d) => d.category)));
+    categories = Array.from(
+      new Set(props.nodes.map((d) => d.category).filter(Boolean)),
+    ) as string[];
     color = d3
       .scaleOrdinal<string>()
       .domain(categories)
@@ -344,7 +379,7 @@
    */
   function zoomIn(): void {
     if (svg.value && zoomBehavior) {
-      zoomBehavior.scaleBy(d3.select(svg.value), 1.2);
+      zoomBehavior.scaleBy(d3.select(svg.value as SVGSVGElement), 1.2);
     }
   }
 
@@ -353,7 +388,7 @@
    */
   function zoomOut(): void {
     if (svg.value && zoomBehavior) {
-      zoomBehavior.scaleBy(d3.select(svg.value), 1 / 1.2);
+      zoomBehavior.scaleBy(d3.select(svg.value as SVGSVGElement), 1 / 1.2);
     }
   }
 
@@ -363,7 +398,10 @@
    */
   function applyZoom(scale: number): void {
     if (svg.value && zoomBehavior) {
-      d3.select(svg.value).call(zoomBehavior.scaleTo as any, scale);
+      d3.select(svg.value as SVGSVGElement).call(
+        zoomBehavior.scaleTo as any,
+        scale,
+      );
     }
   }
 

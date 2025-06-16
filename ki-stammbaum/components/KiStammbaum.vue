@@ -28,7 +28,7 @@
   let previousVisibleYearRange: [number, number] | null = null;
 
   interface GraphNode extends Node {
-    name?: string;
+    // name: string; // Inherit as required from Node
     x?: number; // Current x position
     y?: number; // Current y position
     fx?: number | null; // Fixed x position (for physics)
@@ -47,7 +47,7 @@
     links: { type: Array as PropType<Link[] | undefined> },
     usePhysics: { type: Boolean, default: true },
     currentYearRange: {
-      type: Array as PropType<[number, number]>,
+      type: Object as PropType<[number, number]>,
       required: true,
     },
     highlightNodeId: { type: String as PropType<string | null>, default: null },
@@ -63,7 +63,7 @@
   }>();
 
   const svg = ref<SVGSVGElement | null>(null);
-  const container = ref<HTMLElement | null>(null);
+  const container = ref<HTMLDivElement | null>(null);
   const tooltip = ref<HTMLElement | null>(null);
   let resizeObserver: ResizeObserver | null = null;
   let lastRenderedYearRange: [number, number] | null = null;
@@ -130,26 +130,43 @@
       const currentZoomScale = lastTransform.k;
 
       let shouldRender = false;
-      if (previousZoomScale === null || Math.abs(currentZoomScale - previousZoomScale) > ZOOM_SCALE_THRESHOLD) {
+      if (
+        previousZoomScale === null ||
+        Math.abs(currentZoomScale - previousZoomScale) > ZOOM_SCALE_THRESHOLD
+      ) {
         shouldRender = true;
       }
 
       const roundedMinVisibleYear = Math.round(minVisibleYear);
       const roundedMaxVisibleYear = Math.round(maxVisibleYear);
 
-      if (previousVisibleYearRange === null ||
-        Math.abs(roundedMinVisibleYear - previousVisibleYearRange[0]) >= YEAR_RANGE_THRESHOLD ||
-        Math.abs(roundedMaxVisibleYear - previousVisibleYearRange[1]) >= YEAR_RANGE_THRESHOLD) {
+      if (
+        previousVisibleYearRange === null ||
+        Math.abs(roundedMinVisibleYear - previousVisibleYearRange[0]) >=
+          YEAR_RANGE_THRESHOLD ||
+        Math.abs(roundedMaxVisibleYear - previousVisibleYearRange[1]) >=
+          YEAR_RANGE_THRESHOLD
+      ) {
         shouldRender = true;
       }
-      if (roundedMinVisibleYear > roundedMaxVisibleYear && (previousVisibleYearRange === null || previousVisibleYearRange[0] <= previousVisibleYearRange[1])) {
-          shouldRender = true;
+      if (
+        roundedMinVisibleYear > roundedMaxVisibleYear &&
+        (previousVisibleYearRange === null ||
+          previousVisibleYearRange[0] <= previousVisibleYearRange[1])
+      ) {
+        shouldRender = true;
       }
 
       if (shouldRender) {
         previousZoomScale = currentZoomScale;
-        previousVisibleYearRange = [roundedMinVisibleYear, roundedMaxVisibleYear];
-        emit('mainViewRangeChanged', [roundedMinVisibleYear, roundedMaxVisibleYear]);
+        previousVisibleYearRange = [
+          roundedMinVisibleYear,
+          roundedMaxVisibleYear,
+        ];
+        emit('mainViewRangeChanged', [
+          roundedMinVisibleYear,
+          roundedMaxVisibleYear,
+        ]);
         render();
       }
     }
@@ -158,7 +175,7 @@
 
   function getOriginalNodeIds(node: GraphNode): string[] {
     if (node.isCluster && node.childNodes) {
-      return node.childNodes.map(cn => cn.id);
+      return node.childNodes.map((cn) => cn.id);
     }
     return [node.id];
   }
@@ -178,7 +195,9 @@
     const visualLinks: d3.SimulationLinkDatum<GraphNode>[] = [];
     const createdLinks = new Set<string>();
 
-    console.log(`[${new Date().toISOString()}] generateLinksForZoomLevel triggered for level ${zoomLevel}`);
+    console.log(
+      `[${new Date().toISOString()}] generateLinksForZoomLevel triggered for level ${zoomLevel}`,
+    );
 
     // Strategy for Levels 1 & 2: Aggregate links between major clusters.
     // A link is drawn between two clusters if any original concept in cluster A
@@ -191,7 +210,13 @@
           const clusterA = displayNodes[i];
           const clusterB = displayNodes[j];
 
-          if (!clusterA.isCluster || !clusterB.isCluster || !clusterA.childNodes || !clusterB.childNodes) continue;
+          if (
+            !clusterA.isCluster ||
+            !clusterB.isCluster ||
+            !clusterA.childNodes ||
+            !clusterB.childNodes
+          )
+            continue;
 
           const linkKey = `${clusterA.id}-${clusterB.id}`;
           if (createdLinks.has(linkKey)) continue;
@@ -203,7 +228,10 @@
 
           let connectionExists = false;
           for (const originalLink of originalLinks) {
-            if (setOriginalIdsA.has(originalLink.source) && setOriginalIdsB.has(originalLink.target)) {
+            if (
+              setOriginalIdsA.has(originalLink.source) &&
+              setOriginalIdsB.has(originalLink.target)
+            ) {
               connectionExists = true;
               break;
             }
@@ -218,32 +246,52 @@
     } else {
       // Strategy for Levels 3 & 4: Links connect the visual representations (could be clusters or individual nodes).
       // This uses a local helper to find what a source/target ID maps to in the current displayNodes.
-      const findVisualNodeRepresentingLocal = (originalId: string): GraphNode | undefined => {
-        let found = displayNodes.find(n => !n.isCluster && n.id === originalId);
+      const findVisualNodeRepresentingLocal = (
+        originalId: string,
+      ): GraphNode | undefined => {
+        let found = displayNodes.find(
+          (n) => !n.isCluster && n.id === originalId,
+        );
         if (found) return found;
-        found = displayNodes.find(n => n.isCluster && n.childNodes?.some(child => child.id === originalId));
+        found = displayNodes.find(
+          (n) =>
+            n.isCluster &&
+            n.childNodes?.some((child) => child.id === originalId),
+        );
         return found;
       };
 
-      originalLinks.forEach(originalLink => {
-        const sourceVisual = findVisualNodeRepresentingLocal(originalLink.source);
-        const targetVisual = findVisualNodeRepresentingLocal(originalLink.target);
+      originalLinks.forEach((originalLink) => {
+        const sourceVisual = findVisualNodeRepresentingLocal(
+          originalLink.source,
+        );
+        const targetVisual = findVisualNodeRepresentingLocal(
+          originalLink.target,
+        );
 
-        if (sourceVisual && targetVisual && sourceVisual.id !== targetVisual.id) {
+        if (
+          sourceVisual &&
+          targetVisual &&
+          sourceVisual.id !== targetVisual.id
+        ) {
           // At Level 4, all nodes are individual. Apply year plausibility.
           if (zoomLevel === 4) {
             if (sourceVisual.year <= targetVisual.year) {
-               const linkKey = `${sourceVisual.id}-${targetVisual.id}`;
-               if (!createdLinks.has(linkKey)) {
-                  visualLinks.push({ source: sourceVisual, target: targetVisual });
-                  createdLinks.add(linkKey);
-               }
+              const linkKey = `${sourceVisual.id}-${targetVisual.id}`;
+              if (!createdLinks.has(linkKey)) {
+                visualLinks.push({
+                  source: sourceVisual,
+                  target: targetVisual,
+                });
+                createdLinks.add(linkKey);
+              }
             }
-          } else { // Level 3 can have mixed clusters and individual nodes.
+          } else {
+            // Level 3 can have mixed clusters and individual nodes.
             const linkKey = `${sourceVisual.id}-${targetVisual.id}`;
             if (!createdLinks.has(linkKey)) {
-                visualLinks.push({ source: sourceVisual, target: targetVisual });
-                createdLinks.add(linkKey);
+              visualLinks.push({ source: sourceVisual, target: targetVisual });
+              createdLinks.add(linkKey);
             }
           }
         }
@@ -255,12 +303,13 @@
   function render(): void {
     console.log(`[${new Date().toISOString()}] render function triggered`);
     const currentFrameClusterInfo = new Map<
-      string, { x: number; y: number; childNodeOriginalIds: string[] }
+      string,
+      { x: number; y: number; childNodeOriginalIds: string[] }
     >();
     if (!svg.value || !props.nodes || props.nodes.length === 0) return;
     simulation?.stop();
 
-    const svgSel = d3.select(svg.value);
+    const svgSel = d3.select(svg.value as SVGSVGElement);
     svgSel.selectAll('*').remove();
 
     const width = svg.value.clientWidth || 600;
@@ -314,8 +363,8 @@
     const displayNodes: GraphNode[] = [];
 
     const allNodeCategories = Array.from(
-      new Set(filteredNodes.map((n) => n.category)),
-    );
+      new Set(filteredNodes.map((n) => n.category).filter(Boolean)),
+    ) as string[];
     const color = d3
       .scaleOrdinal<string>()
       .domain(allNodeCategories)
@@ -337,16 +386,18 @@
               const clusterId = `century-block-cluster-${startYear}`; // e.g., century-block-cluster-1800
               const childNodes = [...nodesInBlock]; // All original nodes within this block.
               const categoriesInCluster = Array.from(
-                new Set(childNodes.map((n) => n.category)),
+                new Set(childNodes.map((n) => n.category).filter(Boolean)),
+              ) as string[];
+              const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+                color(cat || ''),
               );
-              const categoryColorsInCluster = categoriesInCluster.map((cat) => color(cat));
               displayNodes.push({
                 id: clusterId,
                 year: representativeYear,
                 category: 'global_cluster', // Use 'global_cluster' for consistent styling/handling.
                 name: `Concepts ${startYear}-${startYear + 99}`, // e.g., "Concepts 1800-1899"
                 description: `Cluster of ${childNodes.length} concepts from ${startYear} to ${startYear + 99}. Categories: ${categoriesInCluster.join(', ')}`,
-                dependencies: [], // Dependencies are handled by generateLinksForZoomLevel
+                // dependencies: [], // Dependencies are handled by generateLinksForZoomLevel
                 isCluster: true,
                 count: childNodes.length,
                 childNodes: childNodes,
@@ -370,15 +421,23 @@
               const representativeYear = centuryStartYear + 50; // Position at mid-century.
               const clusterId = `century-cluster-${centuryStartYear}`; // e.g., century-cluster-1900
               const childNodes = [...nodesInCentury]; // All original nodes in this century.
-               const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
-               const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat));
+              const categoriesInCluster = Array.from(
+                new Set(
+                  childNodes
+                    .map((n) => n.category)
+                    .filter((c): c is string => c !== undefined && c !== null),
+                ),
+              );
+              const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+                color(cat),
+              );
               displayNodes.push({
                 id: clusterId,
                 year: representativeYear,
                 category: 'century_cluster', // Specific category for century clusters.
-                name: `Concepts of the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 ? 'th' : centuryStartYear === 1900 ? 'th': 'th'} Century`, // e.g., "Concepts of the 19th Century"
-                description: `Cluster of ${childNodes.length} concepts from the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 ? 'th' : centuryStartYear === 1900 ? 'th': 'th'} century.`,
-                dependencies: [], // Dependencies handled by generateLinksForZoomLevel
+                name: `Concepts of the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 ? 'th' : centuryStartYear === 1900 ? 'th' : 'th'} Century`, // e.g., "Concepts of the 19th Century"
+                description: `Cluster of ${childNodes.length} concepts from the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 ? 'th' : centuryStartYear === 1900 ? 'th' : 'th'} century.`,
+                // dependencies: handled by generateLinksForZoomLevel
                 isCluster: true,
                 count: childNodes.length,
                 childNodes: childNodes,
@@ -406,10 +465,10 @@
                 displayNodes.push({
                   id: clusterId,
                   year: representativeYear,
-                  category: category, // Retain original category for the cluster.
+                  category: category || '',
                   name: `${childNodesInGroup.length} ${category} (${decade}s)`, // e.g., "5 Technology (1950s)"
                   description: `Cluster of ${childNodesInGroup.length} ${category} concepts from the ${decade}s`,
-                  dependencies: [], // Dependencies handled by generateLinksForZoomLevel
+                  // dependencies: [], // Dependencies handled by generateLinksForZoomLevel
                   isCluster: true,
                   count: childNodesInGroup.length,
                   childNodes: childNodesInGroup,
@@ -424,7 +483,9 @@
         case 4:
           {
             filteredNodes.forEach((originalNode) => {
-              const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
+              const userSetFy = userPositionedNodes.value.get(
+                originalNode.id,
+              )?.fy;
               // For each original node, create a corresponding graph node.
               const individualGraphNode: GraphNode = {
                 ...originalNode,
@@ -435,7 +496,9 @@
               };
               // Assign previous positions if this node is emerging from a cluster.
               for (const prevClusterData of previousFrameClusterInfo.values()) {
-                if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
+                if (
+                  prevClusterData.childNodeOriginalIds.includes(originalNode.id)
+                ) {
                   individualGraphNode.previous_x = prevClusterData.x;
                   individualGraphNode.previous_y = prevClusterData.y;
                   break;
@@ -447,21 +510,25 @@
           break;
         default: // Fallback: Show individual nodes if zoom level is somehow out of bounds
           filteredNodes.forEach((originalNode) => {
-            const userSetFy = userPositionedNodes.value.get(originalNode.id)?.fy;
-             const individualGraphNode: GraphNode = {
-                ...originalNode,
-                isCluster: false,
-                count: 1,
-                fx: null,
-                fy: userSetFy ?? null,
-              };
+            const userSetFy = userPositionedNodes.value.get(
+              originalNode.id,
+            )?.fy;
+            const individualGraphNode: GraphNode = {
+              ...originalNode,
+              isCluster: false,
+              count: 1,
+              fx: null,
+              fy: userSetFy ?? null,
+            };
             for (const prevClusterData of previousFrameClusterInfo.values()) {
-                if (prevClusterData.childNodeOriginalIds.includes(originalNode.id)) {
-                  individualGraphNode.previous_x = prevClusterData.x;
-                  individualGraphNode.previous_y = prevClusterData.y;
-                  break;
-                }
+              if (
+                prevClusterData.childNodeOriginalIds.includes(originalNode.id)
+              ) {
+                individualGraphNode.previous_x = prevClusterData.x;
+                individualGraphNode.previous_y = prevClusterData.y;
+                break;
               }
+            }
             displayNodes.push(individualGraphNode);
           });
           break;
@@ -475,8 +542,8 @@
       .range([40, width - 40]);
 
     const categoriesForScale = Array.from(
-      new Set(filteredNodes.map((n) => n.category)),
-    );
+      new Set(filteredNodes.map((n) => n.category).filter(Boolean)),
+    ) as string[];
     yScale = d3
       .scalePoint<string>()
       .domain(
@@ -494,7 +561,10 @@
         typeof n.category === 'string'
       ) {
         n.x = xScale(n.year);
-        n.y = (n.category === 'global_cluster' || n.category === 'century_cluster') ? height / 2 : yScale(n.category);
+        n.y =
+          n.category === 'global_cluster' || n.category === 'century_cluster'
+            ? height / 2
+            : yScale(n.category);
       } else {
         n.x = width / 2;
         n.y = height / 2;
@@ -511,7 +581,9 @@
 
     const g = svgSel.append('g');
 
-    let originalZoomHandler: ((event: d3.D3ZoomEvent<SVGSVGElement, unknown>, d: unknown) => void) | null = null;
+    let originalZoomHandler:
+      | ((event: d3.D3ZoomEvent<SVGSVGElement, unknown>, d: unknown) => void)
+      | null = null;
     if (!zoomBehavior) {
       /**
        * Handles D3 zoom events (mouse wheel, touch gestures, programmatic zoom).
@@ -520,37 +592,56 @@
       originalZoomHandler = (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
         const currentScale = lastTransform.k;
         if (!event.transform) {
-            if (g) { g.attr('transform', lastTransform.toString()); }
-            debouncedProcessZoom();
-            return;
+          if (g) {
+            g.attr('transform', lastTransform.toString());
+          }
+          debouncedProcessZoom();
+          return;
         }
         const eventScale = event.transform.k;
         let targetLevel = currentZoomLevel.value;
 
         if (event.sourceEvent) {
           if (eventScale > currentScale) {
-            targetLevel = Math.min(ZOOM_LEVEL_SCALES.length, currentZoomLevel.value + 1);
+            targetLevel = Math.min(
+              ZOOM_LEVEL_SCALES.length,
+              currentZoomLevel.value + 1,
+            );
           } else if (eventScale < currentScale) {
             targetLevel = Math.max(1, currentZoomLevel.value - 1);
           }
         }
 
-        if (targetLevel !== currentZoomLevel.value && event.sourceEvent && ZOOM_LEVEL_SCALES[targetLevel -1] !== undefined) {
-          const targetScale = ZOOM_LEVEL_SCALES[targetLevel -1];
+        if (
+          targetLevel !== currentZoomLevel.value &&
+          event.sourceEvent &&
+          ZOOM_LEVEL_SCALES[targetLevel - 1] !== undefined
+        ) {
+          const targetScale = ZOOM_LEVEL_SCALES[targetLevel - 1];
           const svgInstance = svg.value;
           if (svgInstance) {
-            const [pointerX, pointerY] = event.sourceEvent ? d3.pointer(event.sourceEvent, svgInstance) : [svgInstance.clientWidth / 2, svgInstance.clientHeight / 2];
+            const [pointerX, pointerY] = event.sourceEvent
+              ? d3.pointer(event.sourceEvent, svgInstance)
+              : [svgInstance.clientWidth / 2, svgInstance.clientHeight / 2];
             const currentTransform = lastTransform;
 
-            const newX = pointerX - (pointerX - currentTransform.x) * (targetScale / currentTransform.k);
-            const newY = pointerY - (pointerY - currentTransform.y) * (targetScale / currentTransform.k);
+            const newX =
+              pointerX -
+              (pointerX - currentTransform.x) *
+                (targetScale / currentTransform.k);
+            const newY =
+              pointerY -
+              (pointerY - currentTransform.y) *
+                (targetScale / currentTransform.k);
 
-            const newTransform = d3.zoomIdentity.translate(newX, newY).scale(targetScale);
+            const newTransform = d3.zoomIdentity
+              .translate(newX, newY)
+              .scale(targetScale);
 
-            d3.select(svgInstance)
+            d3.select(svgInstance as SVGSVGElement)
               .transition()
               .duration(300)
-              .call(zoomBehavior!.transform, newTransform)
+              .call(zoomBehavior!.transform as any, newTransform)
               .on('end', () => {
                 currentZoomLevel.value = targetLevel;
                 lastTransform = newTransform;
@@ -559,10 +650,14 @@
           }
         } else {
           if (g) {
-             g.attr('transform', event.transform.toString());
+            g.attr('transform', event.transform.toString());
           }
           lastTransform = event.transform;
-          if (event.transform.k !== currentScale || event.transform.x !== lastTransform.x || event.transform.y !== lastTransform.y) {
+          if (
+            event.transform.k !== currentScale ||
+            event.transform.x !== lastTransform.x ||
+            event.transform.y !== lastTransform.y
+          ) {
             debouncedProcessZoom();
           }
         }
@@ -576,45 +671,58 @@
     svgSel.call(zoomBehavior as any);
 
     if (zoomBehavior) {
-        const targetScale = ZOOM_LEVEL_SCALES[currentZoomLevel.value - 1];
-        let newTransform = lastTransform;
+      const targetScale = ZOOM_LEVEL_SCALES[currentZoomLevel.value - 1];
+      let newTransform = lastTransform;
 
-        if (lastTransform === d3.zoomIdentity || Math.abs(lastTransform.k - targetScale) > 0.001) {
-          const svgWidth = svg.value?.clientWidth || 600; // Renamed to avoid conflict
-          const svgHeight = svg.value?.clientHeight || 400; // Renamed to avoid conflict
+      if (
+        lastTransform === d3.zoomIdentity ||
+        Math.abs(lastTransform.k - targetScale) > 0.001
+      ) {
+        const svgWidth = svg.value?.clientWidth || 600; // Renamed to avoid conflict
+        const svgHeight = svg.value?.clientHeight || 400; // Renamed to avoid conflict
 
-          if (lastTransform === d3.zoomIdentity) {
-            newTransform = d3.zoomIdentity
-              .translate(svgWidth / 2, svgHeight / 2)
-              .scale(targetScale)
-              .translate(-svgWidth / 2, -svgHeight / 2);
-          } else {
-            const centerX = svgWidth / 2;
-            const centerY = svgHeight / 2;
-            const newX = centerX - (centerX - lastTransform.x) * (targetScale / lastTransform.k);
-            const newY = centerY - (centerY - lastTransform.y) * (targetScale / lastTransform.k);
-            newTransform = d3.zoomIdentity.translate(newX, newY).scale(targetScale);
-          }
+        if (lastTransform === d3.zoomIdentity) {
+          newTransform = d3.zoomIdentity
+            .translate(svgWidth / 2, svgHeight / 2)
+            .scale(targetScale)
+            .translate(-svgWidth / 2, -svgHeight / 2);
+        } else {
+          const centerX = svgWidth / 2;
+          const centerY = svgHeight / 2;
+          const newX =
+            centerX -
+            (centerX - lastTransform.x) * (targetScale / lastTransform.k);
+          const newY =
+            centerY -
+            (centerY - lastTransform.y) * (targetScale / lastTransform.k);
+          newTransform = d3.zoomIdentity
+            .translate(newX, newY)
+            .scale(targetScale);
         }
+      }
 
-        const tempZoomHandler = zoomBehavior.on('zoom');
-        zoomBehavior.on('zoom', null);
+      const tempZoomHandler = zoomBehavior.on('zoom');
+      zoomBehavior.on('zoom', null);
 
-        (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(
-          svgSel as any,
-          newTransform
-        );
-        lastTransform = newTransform;
+      (zoomBehavior as d3.ZoomBehavior<SVGSVGElement, unknown>).transform(
+        svgSel as any,
+        newTransform,
+      );
+      lastTransform = newTransform;
 
-        if (tempZoomHandler) {
-          zoomBehavior.on('zoom', tempZoomHandler);
-        }
+      if (tempZoomHandler) {
+        zoomBehavior.on('zoom', tempZoomHandler);
+      }
     }
 
     // --- LINK RE-MAPPING & GENERATION ---
     // The actual links to draw depend on the current zoom level and clustering.
     // This function generates the appropriate set of links.
-    const visualLinks = generateLinksForZoomLevel(displayNodes, props.links || [], currentZoomLevel.value);
+    const visualLinks = generateLinksForZoomLevel(
+      displayNodes,
+      props.links || [],
+      currentZoomLevel.value,
+    );
     // --- END LINK RE-MAPPING & GENERATION ---
 
     let culledDisplayNodes = displayNodes;
@@ -630,15 +738,16 @@
 
       culledDisplayNodes = displayNodes.filter((node) => {
         const nodeX = xScale!(node.year);
-        const nodeY = yScale.domain().includes(node.category)
-          ? yScale!(node.category)!
-          : height / 2; // Use height from render() scope
+        const nodeY =
+          yScale && node.category
+            ? yScale(node.category)
+            : svg.value!.clientHeight / 2;
 
         return (
           nodeX >= viewportMinDataX - cullingBuffer &&
           nodeX <= viewportMaxDataX + cullingBuffer &&
-          nodeY >= viewportMinDataY - cullingBuffer &&
-          nodeY <= viewportMaxDataY + cullingBuffer
+          (nodeY ?? 0) >= viewportMinDataY - cullingBuffer &&
+          (nodeY ?? 0) <= viewportMaxDataY + cullingBuffer
         );
       });
 
@@ -675,12 +784,19 @@
       .attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#arrowhead)');
 
-    const linkUpdateAndEnter = linkEnter.merge(linkSelection);
+    const linkUpdateAndEnter = linkEnter.merge(
+      linkSelection as unknown as d3.Selection<
+        SVGLineElement,
+        d3.SimulationLinkDatum<GraphNode>,
+        SVGGElement,
+        unknown
+      >,
+    );
 
     const nodeSelection = g
       .append('g')
       .selectAll('circle')
-      .data(culledDisplayNodes, (d: GraphNode) => d.id);
+      .data(culledDisplayNodes as unknown as GraphNode[], (d: any) => d.id);
 
     /**
      * Helper function to find the target parent cluster for an exiting node.
@@ -690,15 +806,22 @@
      * @param newDisplayNodes The array of nodes that will be visible after the transition (current `displayNodes`).
      * @returns The parent GraphNode from `newDisplayNodes` if found, otherwise `undefined`.
      */
-    const findTargetParentCluster = (exitingNode: GraphNode, newDisplayNodes: GraphNode[]): GraphNode | undefined => {
+    const findTargetParentCluster = (
+      exitingNode: GraphNode,
+      newDisplayNodes: GraphNode[],
+    ): GraphNode | undefined => {
       // Get the original node IDs of the exiting node (could be a single ID or IDs of children if it's a cluster).
       const originalIdsToFind = getOriginalNodeIds(exitingNode);
       if (originalIdsToFind.length === 0) return undefined;
 
-      return newDisplayNodes.find(newCluster => {
+      return newDisplayNodes.find((newCluster) => {
         if (!newCluster.isCluster || !newCluster.childNodes) return false;
-        const newClusterOriginalIds = new Set(newCluster.childNodes.map(cn => cn.id));
-        return originalIdsToFind.some(idToFind => newClusterOriginalIds.has(idToFind));
+        const newClusterOriginalIds = new Set(
+          newCluster.childNodes.map((cn) => cn.id),
+        );
+        return originalIdsToFind.some((idToFind) =>
+          newClusterOriginalIds.has(idToFind),
+        );
       });
     };
 
@@ -709,15 +832,17 @@
       .attr('r', 0) // Shrink radius to 0.
       .style('opacity', 0) // Fade out.
       // Animate exiting nodes towards the position of their new parent cluster.
-      .attr('cx', (d: GraphNode) => {
+      .attr('cx', (d: any) => {
         // `displayNodes` (the second argument to findTargetParentCluster) refers to the nodes that *will* be displayed.
-        const parentCluster = findTargetParentCluster(d, displayNodes);
+        const node = d as GraphNode;
+        const parentCluster = findTargetParentCluster(node, displayNodes);
         // If a parent is found, move towards it. Otherwise, use its current x (should ideally not happen if logic is correct).
-        return parentCluster?.x ?? d.x ?? 0;
+        return (parentCluster?.x ?? node.x ?? 0).toString();
       })
-      .attr('cy', (d: GraphNode) => {
-        const parentCluster = findTargetParentCluster(d, displayNodes);
-        return parentCluster?.y ?? d.y ?? 0;
+      .attr('cy', (d: any) => {
+        const node = d as GraphNode;
+        const parentCluster = findTargetParentCluster(node, displayNodes);
+        return (parentCluster?.y ?? node.y ?? 0).toString();
       })
       .remove(); // Remove from DOM after transition.
 
@@ -734,16 +859,21 @@
               ? d.categoryColorsInCluster[0]
               : '#888';
           }
-          const baseColor = color(d.category)!;
+          const baseColor = color(d.category || '');
           return d3.color(baseColor)?.darker(0.5).toString() ?? '#555';
         }
-        return color(d.category)!;
+        return color(d.category || '');
       })
       .style('cursor', 'pointer')
       // Click handler for nodes.
-      .on('click', function(_e, d: GraphNode) {
+      .on('click', function (_e, d: GraphNode) {
         // If a cluster node is clicked and not at the maximum zoom level:
-        if (d.isCluster && d.childNodes && d.childNodes.length > 0 && currentZoomLevel.value < ZOOM_LEVEL_SCALES.length) {
+        if (
+          d.isCluster &&
+          d.childNodes &&
+          d.childNodes.length > 0 &&
+          currentZoomLevel.value < ZOOM_LEVEL_SCALES.length
+        ) {
           // Determine the target zoom level (next level in).
           const targetZoomLevel = currentZoomLevel.value + 1;
           const targetScale = ZOOM_LEVEL_SCALES[targetZoomLevel - 1];
@@ -759,13 +889,15 @@
             const newTx = currentWidth / 2 - (d.x ?? 0) * targetScale;
             const newTy = currentHeight / 2 - (d.y ?? 0) * targetScale;
 
-            const newTransform = d3.zoomIdentity.translate(newTx, newTy).scale(targetScale);
+            const newTransform = d3.zoomIdentity
+              .translate(newTx, newTy)
+              .scale(targetScale);
 
             // Animate the zoom transition.
-            d3.select(svg.value)
+            d3.select(svg.value as SVGSVGElement)
               .transition()
               .duration(300)
-              .call(zoomBehavior.transform, newTransform) // Programmatically trigger zoom.
+              .call(zoomBehavior.transform as any, newTransform) // Programmatically trigger zoom.
               .on('end', () => {
                 // After transition, update the current zoom level and last transform state.
                 currentZoomLevel.value = targetZoomLevel;
@@ -821,7 +953,14 @@
       .attr('cx', (d) => d.previous_x ?? d.x ?? 0) // Use parent's old x or current x.
       .attr('cy', (d) => d.previous_y ?? d.y ?? 0); // Use parent's old y or current y.
 
-    const nodeUpdateAndEnter = nodeEnter.merge(nodeSelection);
+    const nodeUpdateAndEnter = nodeEnter.merge(
+      nodeSelection as unknown as d3.Selection<
+        SVGCircleElement,
+        GraphNode,
+        SVGGElement,
+        unknown
+      >,
+    );
 
     nodeUpdateAndEnter.call(
       d3
@@ -834,7 +973,7 @@
     const labelSelection = g
       .append('g')
       .selectAll('text')
-      .data(culledDisplayNodes, (d: GraphNode) => d.id);
+      .data(culledDisplayNodes as unknown as GraphNode[], (d: any) => d.id);
 
     labelSelection
       .exit()
@@ -842,13 +981,15 @@
       .duration(transitionDuration)
       .style('opacity', 0)
       // Animate exiting labels towards their new parent cluster's position.
-      .attr('x', (d: GraphNode) => {
-        const parentCluster = findTargetParentCluster(d, displayNodes);
-        return parentCluster?.x ?? d.x ?? 0; // Move towards parent's x.
+      .attr('x', (d: any) => {
+        const node = d as GraphNode;
+        const parentCluster = findTargetParentCluster(node, displayNodes);
+        return (parentCluster?.x ?? node.x ?? 0).toString(); // Move towards parent's x.
       })
-      .attr('y', (d: GraphNode) => {
-        const parentCluster = findTargetParentCluster(d, displayNodes);
-        return (parentCluster?.y ?? d.y ?? 0) -12; // Move towards parent's y (offset for label).
+      .attr('y', (d: any) => {
+        const node = d as GraphNode;
+        const parentCluster = findTargetParentCluster(node, displayNodes);
+        return ((parentCluster?.y ?? node.y ?? 0) - 12).toString(); // Move towards parent's y (offset for label)
       })
       .remove(); // Remove after transition.
 
@@ -860,12 +1001,19 @@
       .style('font-size', '10px')
       .style('fill', '#333')
       .text((d: GraphNode) => d.name ?? d.id);
-      // Initial position for entering labels, similar to nodes, to animate from parent or current position.
-      labelEnter.attr('x', (d) => d.previous_x ?? d.x ?? 0)
-                .attr('y', (d) => (d.previous_y ?? d.y ?? 0) - 12);
+    // Initial position for entering labels, similar to nodes, to animate from parent or current position.
+    labelEnter
+      .attr('x', (d) => d.previous_x ?? d.x ?? 0)
+      .attr('y', (d) => (d.previous_y ?? d.y ?? 0) - 12);
 
-
-    const labelUpdateAndEnter = labelEnter.merge(labelSelection);
+    const labelUpdateAndEnter = labelEnter.merge(
+      labelSelection as unknown as d3.Selection<
+        SVGTextElement,
+        GraphNode,
+        SVGGElement,
+        unknown
+      >,
+    );
 
     if (props.usePhysics) {
       nodeUpdateAndEnter
@@ -876,9 +1024,8 @@
         .attr('stroke', (d: GraphNode) =>
           d.id === props.highlightNodeId ? 'orange' : '#fff',
         )
-        .attr(
-          'stroke-width',
-          (d: GraphNode) => (d.id === props.highlightNodeId ? 3 : 1.5),
+        .attr('stroke-width', (d: GraphNode) =>
+          d.id === props.highlightNodeId ? 3 : 1.5,
         );
 
       labelUpdateAndEnter.style('opacity', 1);
@@ -1010,9 +1157,7 @@
 
         linkUpdateAndEnter
           .filter(
-            (
-              l: any,
-            ) =>
+            (l: any) =>
               (l.source as GraphNode).id === subjectNode.id ||
               (l.target as GraphNode).id === subjectNode.id,
           )
@@ -1087,7 +1232,8 @@
   onMounted(() => {
     console.log(`[${new Date().toISOString()}] onMounted hook triggered`);
     resizeObserver = new ResizeObserver(() => render());
-    if (container.value) resizeObserver.observe(container.value);
+    if (container.value)
+      resizeObserver.observe(container.value as unknown as Element);
   });
 
   onBeforeUnmount(() => {
@@ -1120,7 +1266,7 @@
 
     childNodes.forEach((node) => {
       const nodeX = xScale!(node.year);
-      const nodeY = yScale!(node.category) ?? svg.value!.clientHeight / 2;
+      const nodeY = yScale!(node.category || '') ?? svg.value!.clientHeight / 2;
       minX = Math.min(minX, nodeX);
       maxX = Math.max(maxX, nodeX);
       minY = Math.min(minY, nodeY);
@@ -1196,7 +1342,10 @@
     () => props.targetZoomLevel,
     (newTargetLevel) => {
       // Check if the new target level is defined, valid, and different from the current internal level.
-      if (newTargetLevel !== undefined && newTargetLevel !== currentZoomLevel.value) {
+      if (
+        newTargetLevel !== undefined &&
+        newTargetLevel !== currentZoomLevel.value
+      ) {
         if (newTargetLevel >= 1 && newTargetLevel <= ZOOM_LEVEL_SCALES.length) {
           const targetScale = ZOOM_LEVEL_SCALES[newTargetLevel - 1]; // Get scale for the target level.
           const svgInstance = svg.value;
@@ -1208,15 +1357,23 @@
             const currentHeight = svgInstance.clientHeight;
             const currentTransform = lastTransform;
 
-            const newX = currentWidth / 2 - (currentWidth / 2 - currentTransform.x) * (targetScale / currentTransform.k);
-            const newY = currentHeight / 2 - (currentHeight / 2 - currentTransform.y) * (targetScale / currentTransform.k);
+            const newX =
+              currentWidth / 2 -
+              (currentWidth / 2 - currentTransform.x) *
+                (targetScale / currentTransform.k);
+            const newY =
+              currentHeight / 2 -
+              (currentHeight / 2 - currentTransform.y) *
+                (targetScale / currentTransform.k);
 
-            const newTransform = d3.zoomIdentity.translate(newX, newY).scale(targetScale);
+            const newTransform = d3.zoomIdentity
+              .translate(newX, newY)
+              .scale(targetScale);
 
-            d3.select(svgInstance)
+            d3.select(svgInstance as unknown as Element)
               .transition()
               .duration(300)
-              .call(zoomBehavior.transform, newTransform)
+              .call(zoomBehavior.transform as any, newTransform)
               .on('end', () => {
                 lastTransform = newTransform;
               });
