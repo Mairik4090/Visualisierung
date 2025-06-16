@@ -48,7 +48,7 @@
     usePhysics: { type: Boolean, default: true },
     currentYearRange: {
       type: Array as PropType<[number, number]>,
-      default: () => [1950, 2025],
+      required: true,
     },
     highlightNodeId: { type: String as PropType<string | null>, default: null },
     selectedNodeId: { type: String as PropType<string | null>, default: null },
@@ -758,10 +758,10 @@
 
       culledDisplayNodes = displayNodes.filter((node) => {
         const nodeX = xScale ? xScale(node.year) : width / 2; // Default if xScale is null
-        const nodeY =
-          yScale && node.category && yScale.domain().includes(node.category)
-            ? yScale(node.category)
-            : height / 2; // Use height from render() scope or default if category/yScale issues
+
+        const categoryForY = node.category ?? DEFAULT_CATEGORY;
+        let calculatedNodeY = yScale && yScale.domain().includes(categoryForY) ? yScale(categoryForY) : undefined;
+        const nodeY = calculatedNodeY === undefined ? height / 2 : calculatedNodeY; // Ensure nodeY is a number
 
         return (
           nodeX >= viewportMinDataX - cullingBuffer &&
@@ -1051,7 +1051,7 @@
     if (props.usePhysics) {
       nodeUpdateAndEnter
         .attr('r', (d: GraphNode) =>
-          d.isCluster ? (d.count && d.count > 10 ? 14 : 10) : 6,
+          d.isCluster ? ((d.count ?? 0) > 10 ? 14 : 10) : 6, // Added fallback for d.count
         )
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
@@ -1076,17 +1076,17 @@
             .distance(60),
         )
         .force('charge', d3.forceManyBody().strength(-120))
-        .force('x', d3.forceX<GraphNode>((d: GraphNode) => d.x!).strength(0.3))
-        .force('y', d3.forceY<GraphNode>((d: GraphNode) => d.y!).strength(0.05))
+        .force('x', d3.forceX<GraphNode>((d: GraphNode) => d.x ?? 0).strength(0.3)) // Fallback for d.x
+        .force('y', d3.forceY<GraphNode>((d: GraphNode) => d.y ?? 0).strength(0.05)) // Fallback for d.y
         .on('tick', ticked);
     } else {
       nodeUpdateAndEnter
         .transition()
         .duration(transitionDuration)
-        .attr('cx', (d: GraphNode) => d.x!)
-        .attr('cy', (d: GraphNode) => d.y!)
+        .attr('cx', (d: GraphNode) => d.x ?? 0) // Fallback for d.x
+        .attr('cy', (d: GraphNode) => d.y ?? 0) // Fallback for d.y
         .attr('r', (d: GraphNode) =>
-          d.isCluster ? (d.count && d.count > 10 ? 14 : 10) : 6,
+          d.isCluster ? ((d.count ?? 0) > 10 ? 14 : 10) : 6, // Fallback for d.count
         )
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
@@ -1099,7 +1099,7 @@
       labelUpdateAndEnter
         .transition()
         .duration(transitionDuration)
-        .attr('x', (d: GraphNode) => d.x!)
+        .attr('x', (d: GraphNode) => d.x ?? 0) // Fallback for d.x
         .attr('y', (d: GraphNode) => (d.y ?? 0) - 12)
         .style('opacity', 1);
 
@@ -1108,19 +1108,19 @@
         .duration(transitionDuration)
         .attr(
           'x1',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x ?? 0, // Fallback
         )
         .attr(
           'y1',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y ?? 0, // Fallback
         )
         .attr(
           'x2',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x ?? 0, // Fallback
         )
         .attr(
           'y2',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y ?? 0, // Fallback
         )
         .attr('stroke-opacity', 0.6);
 
@@ -1140,25 +1140,25 @@
       linkUpdateAndEnter
         .attr(
           'x1',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x ?? 0, // Fallback
         )
         .attr(
           'y1',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y ?? 0, // Fallback
         )
         .attr(
           'x2',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x ?? 0, // Fallback
         )
         .attr(
           'y2',
-          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!,
+          (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y ?? 0, // Fallback
         );
       nodeUpdateAndEnter
-        .attr('cx', (d: GraphNode) => d.x!)
-        .attr('cy', (d: GraphNode) => d.y!);
+        .attr('cx', (d: GraphNode) => d.x ?? 0) // Fallback
+        .attr('cy', (d: GraphNode) => d.y ?? 0); // Fallback
       labelUpdateAndEnter
-        .attr('x', (d: GraphNode) => d.x!)
+        .attr('x', (d: GraphNode) => d.x ?? 0) // Fallback
         .attr('y', (d: GraphNode) => (d.y ?? 0) - 12);
 
       nodeUpdateAndEnter.each(function (dNode: GraphNode) {
@@ -1232,22 +1232,22 @@
           .attr(
             'x1',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.source as GraphNode).x!,
+              (d.source as GraphNode).x ?? 0, // Fallback
           )
           .attr(
             'y1',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.source as GraphNode).y!,
+              (d.source as GraphNode).y ?? 0, // Fallback
           )
           .attr(
             'x2',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.target as GraphNode).x!,
+              (d.target as GraphNode).x ?? 0, // Fallback
           )
           .attr(
             'y2',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.target as GraphNode).y!,
+              (d.target as GraphNode).y ?? 0, // Fallback
           );
       }
     }
@@ -1308,22 +1308,22 @@
           .attr(
             'x1',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.source as GraphNode).x!,
+              (d.source as GraphNode).x ?? 0, // Fallback
           )
           .attr(
             'y1',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.source as GraphNode).y!,
+              (d.source as GraphNode).y ?? 0, // Fallback
           )
           .attr(
             'x2',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.target as GraphNode).x!,
+              (d.target as GraphNode).x ?? 0, // Fallback
           )
           .attr(
             'y2',
             (d: d3.SimulationLinkDatum<GraphNode>) =>
-              (d.target as GraphNode).y!,
+              (d.target as GraphNode).y ?? 0, // Fallback
           );
       }
 

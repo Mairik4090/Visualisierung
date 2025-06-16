@@ -15,7 +15,7 @@
 
   // D3.js Import für Datenvisualisierung
   import * as d3 from 'd3';
-  import type { Node } from '@/types/concept';
+  import type { Node } from '../../types/concept';
 
   // Timeline-specific zoom thresholds
   const TIMELINE_CLUSTER_THRESHOLD_DECADE = 1.2; // Below this, cluster by decade
@@ -117,9 +117,9 @@
           const categoriesInCluster = Array.from(
             new Set(childNodes.map((n) => n.category)),
           );
-          const categoryColorsInCluster = categoriesInCluster.map((cat) =>
-            color(cat),
-          );
+          const categoryColorsInCluster = categoriesInCluster
+            .filter((cat): cat is string => typeof cat === 'string') // Filter out undefined
+            .map((cat) => color(cat)); // Now cat is definitely a string
           displayableTimelineItems.push({
             id: `timeline-decade-cluster-${decade}`,
             year: decade, // Representative year (start of decade)

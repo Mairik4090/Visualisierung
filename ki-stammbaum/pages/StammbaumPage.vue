@@ -2,7 +2,7 @@
   <div class="stammbaum-page">
     <h1>KI-Stammbaum</h1>
 
-    <Timeline
+    <AppTimeline
       v-if="allGraphDataForTimeline.nodes.length"
       :nodes="allGraphDataForTimeline.nodes"
       :highlight-node-id="overallHoveredNodeId"
@@ -45,7 +45,7 @@
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
-    <Legend :categories="legendCategories" />
+    <AppLegend :categories="legendCategories" />
     <FilterControls @filters-applied="onFilters" />
     <ZoomControls
       :current-level="pageCurrentZoomLevel"
@@ -62,8 +62,8 @@
   import KiStammbaum from '@/components/KiStammbaum.vue';
   import FilterControls from '@/components/FilterControls.vue';
   import ConceptDetail from '@/components/ConceptDetail.vue';
-  import Legend from '@/components/Legend.vue';
-  import Timeline from '@/components/Timeline.vue';
+  import AppLegend from '@/components/AppLegend.vue';
+  import AppTimeline from '@/components/AppTimeline.vue';
   import ZoomControls from '@/components/ZoomControls.vue'; // Import ZoomControls
   import { useStammbaumData } from '@/composables/useStammbaumData';
   import { transformToGraph } from '@/utils/graph-transform'; // Imported Graph type
