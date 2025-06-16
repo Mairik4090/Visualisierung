@@ -1,10 +1,6 @@
 <template>
   <div class="timeline-container">
     <svg ref="svg" class="timeline-svg" aria-label="Zeitstrahl" />
-    <div class="zoom-controls">
-      <button type="button" class="zoom-in" @click="zoomIn">+</button>
-      <button type="button" class="zoom-out" @click="zoomOut">−</button>
-    </div>
   </div>
 </template>
 
@@ -232,7 +228,10 @@
               d.id === props.highlightNodeId ? 2 : 1,
             )
             .attr('data-id', (d: TimelineDisplayItem) => d.id) // Added data-id
-            .attr('data-highlighted', (d: TimelineDisplayItem) => d.id === props.highlightNodeId) // Added data-highlighted
+            .attr(
+              'data-highlighted',
+              (d: TimelineDisplayItem) => d.id === props.highlightNodeId,
+            ) // Added data-highlighted
             .style('cursor', 'pointer')
             // Event Handler für Interaktionen
             .on('click', (event: MouseEvent, d: TimelineDisplayItem) => {
@@ -281,7 +280,10 @@
                 d.id === props.highlightNodeId ? 2 : 1,
               )
               // Update data-highlighted attribute as well
-              .attr('data-highlighted', (d: TimelineDisplayItem) => d.id === props.highlightNodeId),
+              .attr(
+                'data-highlighted',
+                (d: TimelineDisplayItem) => d.id === props.highlightNodeId,
+              ),
           ),
 
         // Exit: Entfernte Knoten ausblenden
