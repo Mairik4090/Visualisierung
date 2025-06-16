@@ -25,14 +25,14 @@
   interface TimelineDisplayItem extends Partial<Node> { // Use Partial<Node> to allow overriding/adding properties
     id: string; // Required: Can be original node ID or generated cluster ID
     year: number; // Required: Original year or representative year for the cluster
-    category: string; // Required: Original category or representative/generic category for cluster
+    category?: string; // Required: Original category or representative/generic category for cluster
     isCluster: boolean;
     count?: number; // Number of original nodes it represents (1 if not a cluster)
     childNodes?: Node[]; // Array of original nodes if it's a cluster
     name?: string; // Optional: Cluster name or original node name
     description?: string; // Optional: Cluster description or original node description
-    categoriesInCluster?: string[]; // For decade clusters
-    categoryColorsInCluster?: string[]; // For decade clusters
+    categoriesInCluster?: (string | undefined)[]; // For decade clusters
+    categoryColorsInCluster?: (string | undefined)[]; // For decade clusters
     // Add any other properties from Node that are needed, or specific cluster properties
   }
 
@@ -184,15 +184,16 @@
             .style('opacity', 0) // Startet transparent
             .attr('fill', (d: TimelineDisplayItem) => {
               if (d.isCluster) {
-                if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0 && d.categoryColorsInCluster[0]) {
                   return d.categoryColorsInCluster[0]; // Use first color for decade cluster
                 }
-                return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555'; // Darker for other clusters
+                // Darker for other clusters, with fallback for undefined category
+                return d.category ? (d3.color(color(d.category))?.darker(0.5).toString() ?? '#555') : '#555';
               }
-              return color(d.category);
+              return d.category ? color(d.category) : '#ccc'; // Default color for nodes with undefined category
             })
             .attr('stroke', (d: TimelineDisplayItem) =>
-              d.id === props.highlightNodeId ? 'black' : color(d.category),
+              d.id === props.highlightNodeId ? 'black' : (d.category ? color(d.category) : '#ccc'),
             )
             .attr('stroke-width', (d: TimelineDisplayItem) =>
               d.id === props.highlightNodeId ? 2 : 1,
@@ -222,15 +223,16 @@
               .attr('x', (d: TimelineDisplayItem) => zx(d.year) - barWidth / 2)
               .attr('fill', (d: TimelineDisplayItem) => {
                 if (d.isCluster) {
-                  if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0) {
+                  if (d.category === 'timeline_decade_cluster' && d.categoryColorsInCluster && d.categoryColorsInCluster.length > 0 && d.categoryColorsInCluster[0]) {
                     return d.categoryColorsInCluster[0];
                   }
-                  return d3.color(color(d.category))?.darker(0.5).toString() ?? '#555';
+                  // Darker for other clusters, with fallback for undefined category
+                  return d.category ? (d3.color(color(d.category))?.darker(0.5).toString() ?? '#555') : '#555';
                 }
-                return color(d.category);
+                return d.category ? color(d.category) : '#ccc'; // Default color for nodes with undefined category
               })
               .attr('stroke', (d: TimelineDisplayItem) =>
-                d.id === props.highlightNodeId ? 'black' : color(d.category),
+                d.id === props.highlightNodeId ? 'black' : (d.category ? color(d.category) : '#ccc'),
               )
               .attr('stroke-width', (d: TimelineDisplayItem) =>
                 d.id === props.highlightNodeId ? 2 : 1,

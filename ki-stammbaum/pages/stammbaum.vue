@@ -63,8 +63,8 @@
   import Timeline from '@/components/Timeline.vue';
   import ZoomControls from '@/components/ZoomControls.vue'; // Import ZoomControls
   import { useStammbaumData } from '@/composables/useStammbaumData';
-  import { transformToGraph, type Graph } from '@/utils/graph-transform'; // Imported Graph type
-  import type { Node } from '@/types/concept'; // Added Node type import
+  import { transformToGraph } from '@/utils/graph-transform'; // Imported Graph type
+  import type { Graph, Node } from '@/types/concept'; // Added Node type import
 
   // Cache variables
   let previousFiltersSignature: string | null = null;

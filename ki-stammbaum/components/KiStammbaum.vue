@@ -40,6 +40,7 @@
     childNodes?: Node[]; // Array of original nodes if it's a cluster
     categoriesInCluster?: string[]; // For global clusters
     categoryColorsInCluster?: string[]; // For global clusters
+    dependencies?: string[];
   }
 
   const props = defineProps({
@@ -48,7 +49,6 @@
     usePhysics: { type: Boolean, default: true },
     currentYearRange: {
       type: Array as PropType<[number, number]>,
-      required: true,
     },
     highlightNodeId: { type: String as PropType<string | null>, default: null },
     selectedNodeId: { type: String as PropType<string | null>, default: null },
@@ -312,13 +312,14 @@
     // are displayed based on the currentZoomLevel.value. Different zoom levels
     // trigger different clustering strategies.
     const displayNodes: GraphNode[] = [];
+    const DEFAULT_CATEGORY = 'unknown_category'; // Added default category
 
     const allNodeCategories = Array.from(
-      new Set(filteredNodes.map((n) => n.category)),
+      new Set(filteredNodes.map((n) => n.category).filter(c => c !== undefined) as string[]),
     );
     const color = d3
       .scaleOrdinal<string>()
-      .domain(allNodeCategories)
+      .domain(allNodeCategories.length > 0 ? allNodeCategories : [DEFAULT_CATEGORY])
       .range(d3.schemeCategory10);
 
     if (filteredNodes.length > 0) {
@@ -337,9 +338,9 @@
               const clusterId = `century-block-cluster-${startYear}`; // e.g., century-block-cluster-1800
               const childNodes = [...nodesInBlock]; // All original nodes within this block.
               const categoriesInCluster = Array.from(
-                new Set(childNodes.map((n) => n.category)),
+                new Set(childNodes.map((n) => n.category).filter(c => c !== undefined) as string[]),
               );
-              const categoryColorsInCluster = categoriesInCluster.map((cat) => color(cat));
+              const categoryColorsInCluster = categoriesInCluster.map((cat) => color(cat ?? DEFAULT_CATEGORY));
               displayNodes.push({
                 id: clusterId,
                 year: representativeYear,
@@ -370,8 +371,8 @@
               const representativeYear = centuryStartYear + 50; // Position at mid-century.
               const clusterId = `century-cluster-${centuryStartYear}`; // e.g., century-cluster-1900
               const childNodes = [...nodesInCentury]; // All original nodes in this century.
-               const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
-               const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat));
+               const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category).filter(c => c !== undefined) as string[]));
+               const categoryColorsInCluster = categoriesInCluster.map(cat => color(cat ?? DEFAULT_CATEGORY));
               displayNodes.push({
                 id: clusterId,
                 year: representativeYear,
@@ -475,28 +476,29 @@
       .range([40, width - 40]);
 
     const categoriesForScale = Array.from(
-      new Set(filteredNodes.map((n) => n.category)),
+      new Set(filteredNodes.map((n) => n.category).filter(c => c !== undefined) as string[]),
     );
     yScale = d3
       .scalePoint<string>()
       .domain(
         categoriesForScale.length > 0
           ? categoriesForScale
-          : ['default_category_for_empty_scale'],
+          : [DEFAULT_CATEGORY],
       )
       .range([40, height - 40]);
 
     displayNodes.forEach((n: GraphNode) => {
-      if (
-        xScale &&
-        yScale &&
-        typeof n.year === 'number' &&
-        typeof n.category === 'string'
-      ) {
+      if (xScale && typeof n.year === 'number') {
         n.x = xScale(n.year);
-        n.y = (n.category === 'global_cluster' || n.category === 'century_cluster') ? height / 2 : yScale(n.category);
       } else {
         n.x = width / 2;
+      }
+
+      if (yScale && typeof n.category === 'string' && yScale.domain().includes(n.category)) {
+        n.y = (n.category === 'global_cluster' || n.category === 'century_cluster') ? height / 2 : yScale(n.category);
+      } else if (yScale) { // Category might be undefined or not in domain, use a fallback if yScale exists
+        n.y = height / 2; // Fallback y position
+      } else { // xScale or yScale is null
         n.y = height / 2;
       }
     });
@@ -629,10 +631,10 @@
       ]);
 
       culledDisplayNodes = displayNodes.filter((node) => {
-        const nodeX = xScale!(node.year);
-        const nodeY = yScale.domain().includes(node.category)
-          ? yScale!(node.category)!
-          : height / 2; // Use height from render() scope
+        const nodeX = xScale ? xScale(node.year) : width / 2; // Default if xScale is null
+        const nodeY = yScale && node.category && yScale.domain().includes(node.category)
+          ? yScale(node.category)
+          : height / 2; // Use height from render() scope or default if category/yScale issues
 
         return (
           nodeX >= viewportMinDataX - cullingBuffer &&
@@ -654,12 +656,12 @@
 
     const transitionDuration = 300;
 
-    const linkSelection = g
+    const linkSelection: d3.Selection<SVGLineElement, d3.SimulationLinkDatum<GraphNode>, SVGGElement, unknown> = g
       .append('g')
       .attr('stroke', '#999')
       .attr('stroke-opacity', 0.6)
-      .selectAll('line')
-      .data(culledVisualLinks, (d: any) => `${d.source.id}-${d.target.id}`);
+      .selectAll<SVGLineElement, d3.SimulationLinkDatum<GraphNode>>('line')
+      .data(culledVisualLinks, (d: d3.SimulationLinkDatum<GraphNode>) => `${(d.source as GraphNode).id}-${(d.target as GraphNode).id}`);
 
     linkSelection
       .exit()
@@ -668,7 +670,7 @@
       .attr('stroke-opacity', 0)
       .remove();
 
-    const linkEnter = linkSelection
+    const linkEnter: d3.Selection<SVGLineElement, d3.SimulationLinkDatum<GraphNode>, SVGGElement, unknown> = linkSelection
       .enter()
       .append('line')
       .attr('stroke-opacity', 0)
@@ -677,9 +679,9 @@
 
     const linkUpdateAndEnter = linkEnter.merge(linkSelection);
 
-    const nodeSelection = g
+    const nodeSelection: d3.Selection<SVGCircleElement, GraphNode, SVGGElement, unknown> = g
       .append('g')
-      .selectAll('circle')
+      .selectAll<SVGCircleElement, GraphNode>('circle')
       .data(culledDisplayNodes, (d: GraphNode) => d.id);
 
     /**
@@ -721,7 +723,7 @@
       })
       .remove(); // Remove from DOM after transition.
 
-    const nodeEnter = nodeSelection
+    const nodeEnter: d3.Selection<SVGCircleElement, GraphNode, SVGGElement, unknown> = nodeSelection
       .enter() // Select new nodes being added.
       .append('circle')
       .attr('r', 0) // Start with radius 0 for enter animation.
@@ -731,13 +733,13 @@
           if (d.category === 'global_cluster') {
             return d.categoryColorsInCluster &&
               d.categoryColorsInCluster.length > 0
-              ? d.categoryColorsInCluster[0]
+              ? d.categoryColorsInCluster[0] // Assuming categoryColorsInCluster[0] is already guarded or a string
               : '#888';
           }
-          const baseColor = color(d.category)!;
+          const baseColor = color(d.category ?? DEFAULT_CATEGORY); // Use default if category is undefined
           return d3.color(baseColor)?.darker(0.5).toString() ?? '#555';
         }
-        return color(d.category)!;
+        return color(d.category ?? DEFAULT_CATEGORY); // Use default if category is undefined
       })
       .style('cursor', 'pointer')
       // Click handler for nodes.
@@ -785,18 +787,18 @@
           let tooltipContent = '';
           if (d.isCluster) {
             if (d.category === 'global_cluster') {
-              tooltipContent = `<strong>Cluster: ${d.name ?? 'N/A'}</strong><br>Time Span: Approx. ${d.year ? d.year - 25 + ' - ' + (d.year + 24) : 'N/A'}<br>Total Items: ${d.count ?? 'N/A'}<br>Categories: ${d.categoriesInCluster ? d.categoriesInCluster.join(', ') : 'N/A'}`;
-            } else if (d.id.startsWith('cat-decade-cluster-')) {
-              tooltipContent = `<strong>Decade Cluster: ${d.name ?? 'N/A'}</strong><br>Category: ${d.category ?? 'N/A'}<br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description || 'No short description available.'}`;
+              tooltipContent = `<strong>Cluster: ${d.name ?? 'N/A'}</strong><br>Time Span: Approx. ${d.year ? (d.year - 25) + ' - ' + (d.year + 24) : 'N/A'}<br>Total Items: ${d.count ?? 'N/A'}<br>Categories: ${d.categoriesInCluster ? d.categoriesInCluster.join(', ') : 'N/A'}`;
+            } else if (d.id.startsWith('cat-decade-cluster-')) { // Assuming decade clusters have a defined category
+              tooltipContent = `<strong>Decade Cluster: ${d.name ?? 'N/A'}</strong><br>Category: ${d.category ?? DEFAULT_CATEGORY}<br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description ?? 'No short description available.'}`;
             } else if (d.category === 'century_cluster') {
               tooltipContent = `<strong>Century Cluster: ${d.name ?? 'N/A'}</strong><br>Total Items: ${d.count ?? 'N/A'}<br>Categories: ${d.categoriesInCluster ? d.categoriesInCluster.join(', ') : 'N/A'}`;
-            } else if (d.id.startsWith('cat-year-cluster-')) {
-              tooltipContent = `<strong>Year Cluster: ${d.name ?? 'N/A'}</strong><br>Category: ${d.category ?? 'N/A'}<br>Year: ${d.year ?? 'N/A'}<br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description || 'No short description available.'}`;
-            } else {
-              tooltipContent = `<strong>Cluster: ${d.name ?? 'N/A'}</strong><br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description || 'No short description available.'}`;
+            } else if (d.id.startsWith('cat-year-cluster-')) { // Assuming year clusters have a defined category
+              tooltipContent = `<strong>Year Cluster: ${d.name ?? 'N/A'}</strong><br>Category: ${d.category ?? DEFAULT_CATEGORY}<br>Year: ${d.year ?? 'N/A'}<br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description ?? 'No short description available.'}`;
+            } else { // Generic cluster
+              tooltipContent = `<strong>Cluster: ${d.name ?? 'N/A'}</strong><br>Total Items: ${d.count ?? 'N/A'}<br>Description: ${d.description ?? 'No short description available.'}<br>Category: ${d.category ?? DEFAULT_CATEGORY}`;
             }
-          } else {
-            tooltipContent = `<strong>${d.name ?? 'N/A'}</strong><br>Year of Origin: ${d.year ?? 'N/A'}<br>Category: ${d.category ?? 'N/A'}<br>Short Description: ${d.description || 'No short description available.'}`;
+          } else { // Individual node
+            tooltipContent = `<strong>${d.name ?? 'N/A'}</strong><br>Year of Origin: ${d.year ?? 'N/A'}<br>Category: ${d.category ?? DEFAULT_CATEGORY}<br>Short Description: ${d.description ?? 'No short description available.'}`;
           }
           tooltip.value.innerHTML = tooltipContent;
           tooltip.value.style.opacity = '0.9';
@@ -818,8 +820,8 @@
     // start its animation from that parent cluster's last known position.
     // Otherwise (e.g., node appearing due to data change or initial load), start from its calculated position.
     nodeEnter
-      .attr('cx', (d) => d.previous_x ?? d.x ?? 0) // Use parent's old x or current x.
-      .attr('cy', (d) => d.previous_y ?? d.y ?? 0); // Use parent's old y or current y.
+      .attr('cx', (d: GraphNode) => d.previous_x ?? d.x ?? 0) // Use parent's old x or current x.
+      .attr('cy', (d: GraphNode) => d.previous_y ?? d.y ?? 0); // Use parent's old y or current y.
 
     const nodeUpdateAndEnter = nodeEnter.merge(nodeSelection);
 
@@ -831,9 +833,9 @@
         .on('end', dragEnded),
     );
 
-    const labelSelection = g
+    const labelSelection: d3.Selection<SVGTextElement, GraphNode, SVGGElement, unknown> = g
       .append('g')
-      .selectAll('text')
+      .selectAll<SVGTextElement, GraphNode>('text')
       .data(culledDisplayNodes, (d: GraphNode) => d.id);
 
     labelSelection
@@ -848,11 +850,11 @@
       })
       .attr('y', (d: GraphNode) => {
         const parentCluster = findTargetParentCluster(d, displayNodes);
-        return (parentCluster?.y ?? d.y ?? 0) -12; // Move towards parent's y (offset for label).
+        return (parentCluster?.y ?? d.y ?? 0) - 12; // Move towards parent's y (offset for label).
       })
       .remove(); // Remove after transition.
 
-    const labelEnter = labelSelection
+    const labelEnter: d3.Selection<SVGTextElement, GraphNode, SVGGElement, unknown> = labelSelection
       .enter()
       .append('text')
       .style('opacity', 0) // Start transparent.
@@ -861,8 +863,8 @@
       .style('fill', '#333')
       .text((d: GraphNode) => d.name ?? d.id);
       // Initial position for entering labels, similar to nodes, to animate from parent or current position.
-      labelEnter.attr('x', (d) => d.previous_x ?? d.x ?? 0)
-                .attr('y', (d) => (d.previous_y ?? d.y ?? 0) - 12);
+      labelEnter.attr('x', (d: GraphNode) => d.previous_x ?? d.x ?? 0)
+                .attr('y', (d: GraphNode) => (d.previous_y ?? d.y ?? 0) - 12);
 
 
     const labelUpdateAndEnter = labelEnter.merge(labelSelection);
@@ -896,8 +898,8 @@
             .distance(60),
         )
         .force('charge', d3.forceManyBody().strength(-120))
-        .force('x', d3.forceX<GraphNode>((d) => d.x!).strength(0.3))
-        .force('y', d3.forceY<GraphNode>((d) => d.y!).strength(0.05))
+        .force('x', d3.forceX<GraphNode>((d: GraphNode) => d.x!).strength(0.3))
+        .force('y', d3.forceY<GraphNode>((d: GraphNode) => d.y!).strength(0.05))
         .on('tick', ticked);
     } else {
       nodeUpdateAndEnter
@@ -926,13 +928,13 @@
       linkUpdateAndEnter
         .transition()
         .duration(transitionDuration)
-        .attr('x1', (d: any) => (d.source as GraphNode).x!)
-        .attr('y1', (d: any) => (d.source as GraphNode).y!)
-        .attr('x2', (d: any) => (d.target as GraphNode).x!)
-        .attr('y2', (d: any) => (d.target as GraphNode).y!)
+        .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!)
+        .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!)
+        .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!)
+        .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!)
         .attr('stroke-opacity', 0.6);
 
-      displayNodes.forEach((d) => {
+      displayNodes.forEach((d: GraphNode) => {
         if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
           currentFrameClusterInfo.set(d.id, {
             x: d.x,
@@ -946,24 +948,24 @@
     function ticked() {
       console.log(`[${new Date().toISOString()}] ticked function triggered`);
       linkUpdateAndEnter
-        .attr('x1', (d: any) => (d.source as GraphNode).x!)
-        .attr('y1', (d: any) => (d.source as GraphNode).y!)
-        .attr('x2', (d: any) => (d.target as GraphNode).x!)
-        .attr('y2', (d: any) => (d.target as GraphNode).y!);
+        .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!)
+        .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!)
+        .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!)
+        .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!);
       nodeUpdateAndEnter
-        .attr('cx', (d: any) => (d as GraphNode).x!)
-        .attr('cy', (d: any) => (d as GraphNode).y!);
+        .attr('cx', (d: GraphNode) => d.x!)
+        .attr('cy', (d: GraphNode) => d.y!);
       labelUpdateAndEnter
-        .attr('x', (d: any) => (d as GraphNode).x!)
-        .attr('y', (d: any) => ((d as GraphNode).y ?? 0) - 12);
+        .attr('x', (d: GraphNode) => d.x!)
+        .attr('y', (d: GraphNode) => (d.y ?? 0) - 12);
 
-      nodeUpdateAndEnter.each(function (dNode) {
-        const d = dNode as GraphNode;
-        if (d.isCluster && d.childNodes && d.x != null && d.y != null) {
-          currentFrameClusterInfo.set(d.id, {
-            x: d.x,
-            y: d.y,
-            childNodeOriginalIds: d.childNodes.map((cn) => cn.id),
+      nodeUpdateAndEnter.each(function (dNode: GraphNode) { // Explicitly type dNode
+        // const d = dNode as GraphNode; // No longer needed due to explicit type
+        if (dNode.isCluster && dNode.childNodes && dNode.x != null && dNode.y != null) {
+          currentFrameClusterInfo.set(dNode.id, {
+            x: dNode.x,
+            y: dNode.y,
+            childNodeOriginalIds: dNode.childNodes.map((cn) => cn.id),
           });
         }
       });
@@ -1004,22 +1006,22 @@
 
         svgSel
           .selectAll('text')
-          .filter((d: unknown) => (d as GraphNode).id === subjectNode.id)
+          .filter((d: unknown): d is GraphNode => (d as GraphNode).id === subjectNode.id) // Type predicate
           .attr('x', subjectNode.x)
           .attr('y', (subjectNode.y ?? 0) - 12);
 
         linkUpdateAndEnter
           .filter(
             (
-              l: any,
+              l: d3.SimulationLinkDatum<GraphNode>, // Explicitly type l
             ) =>
               (l.source as GraphNode).id === subjectNode.id ||
               (l.target as GraphNode).id === subjectNode.id,
           )
-          .attr('x1', (d: any) => (d.source as GraphNode).x!)
-          .attr('y1', (d: any) => (d.source as GraphNode).y!)
-          .attr('x2', (d: any) => (d.target as GraphNode).x!)
-          .attr('y2', (d: any) => (d.target as GraphNode).y!);
+          .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!)
+          .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!)
+          .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!)
+          .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!);
       }
     }
 
@@ -1028,10 +1030,16 @@
     ) {
       console.log(`[${new Date().toISOString()}] dragEnded function triggered`);
       event.sourceEvent?.stopPropagation();
-      if (!xScale) return;
-
       const subjectNode = event.subject as GraphNode;
-      const targetX = xScale(subjectNode.year);
+
+      let targetX: number | undefined;
+      if (xScale) {
+        targetX = xScale(subjectNode.year);
+      } else {
+        // Fallback if xScale is not available, though this case should ideally not be reached
+        // if render() and other dependent functions are structured correctly.
+        targetX = subjectNode.x;
+      }
 
       if (props.usePhysics) {
         if (!event.active) {
@@ -1051,7 +1059,7 @@
 
         svgSel
           .selectAll('text')
-          .filter((d: unknown) => (d as GraphNode).id === subjectNode.id)
+          .filter((d: unknown): d is GraphNode => (d as GraphNode).id === subjectNode.id) // Type predicate
           .transition()
           .duration(150)
           .attr('x', subjectNode.x)
@@ -1059,16 +1067,16 @@
 
         linkUpdateAndEnter
           .filter(
-            (l: any) =>
+            (l: d3.SimulationLinkDatum<GraphNode>) => // Explicitly type l
               (l.source as GraphNode).id === subjectNode.id ||
               (l.target as GraphNode).id === subjectNode.id,
           )
           .transition()
           .duration(150)
-          .attr('x1', (d: any) => (d.source as GraphNode).x!)
-          .attr('y1', (d: any) => (d.source as GraphNode).y!)
-          .attr('x2', (d: any) => (d.target as GraphNode).x!)
-          .attr('y2', (d: any) => (d.target as GraphNode).y!);
+          .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x!)
+          .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y!)
+          .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x!)
+          .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y!);
       }
 
       if (props.usePhysics) {
@@ -1119,8 +1127,15 @@
       maxY = -Infinity;
 
     childNodes.forEach((node) => {
-      const nodeX = xScale!(node.year);
-      const nodeY = yScale!(node.category) ?? svg.value!.clientHeight / 2;
+      const nodeX = xScale ? xScale(node.year) : undefined;
+      const nodeY = yScale && node.category && yScale.domain().includes(node.category) ? yScale(node.category) : undefined;
+
+      if (nodeX === undefined || nodeY === undefined) {
+        // Skip this node or use a fallback if coordinates can't be determined
+        // For now, let's skip, but a robust solution might involve logging or default values
+        return;
+      }
+
       minX = Math.min(minX, nodeX);
       maxX = Math.max(maxX, nodeX);
       minY = Math.min(minY, nodeY);

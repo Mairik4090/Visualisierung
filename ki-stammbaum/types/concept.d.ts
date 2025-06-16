@@ -28,7 +28,7 @@ export interface Concept {
 export interface Node {
   id: string; // Unique identifier for the node.
   /** Display name of the concept. */
-  name: string;
+  name?: string;
   /** The primary year associated with this node for positioning on the x-axis. */
   year: number;
   /** Optional detailed description, often shown in tooltips or detail views. */
