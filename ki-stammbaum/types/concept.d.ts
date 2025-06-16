@@ -41,7 +41,7 @@ export interface Node {
   fx?: number | null; // Fixed x-position for D3 force simulation.
   fy?: number | null; // Fixed y-position for D3 force simulation.
   isCluster?: boolean; // True if this node represents a cluster of other nodes.
-  count?: number;      // Number of original nodes this visual node represents (1 if not a cluster).
+  count?: number; // Number of original nodes this visual node represents (1 if not a cluster).
   childNodes?: Node[]; // If it's a cluster, the original nodes it contains.
 }
 

@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, defineEmits } from 'vue';
+  import { ref } from 'vue';
 
   /**
    * Defines the event emitted by this component.
@@ -53,8 +53,8 @@
 
   // Reactive refs for storing the current values of the filter inputs.
   const startYearFilter = ref<number | null>(null); // Bound to the "Start Year" input.
-  const endYearFilter = ref<number | null>(null);   // Bound to the "End Year" input.
-  const typeFilter = ref<string>('');              // Bound to the "Typ" select input.
+  const endYearFilter = ref<number | null>(null); // Bound to the "End Year" input.
+  const typeFilter = ref<string>(''); // Bound to the "Typ" select input.
 
   /**
    * Gathers the current filter values from the refs and emits the `filtersApplied` event.

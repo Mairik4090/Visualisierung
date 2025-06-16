@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Node } from '@/types/concept';
+import type { Node, Concept } from '@/types/concept'; // Import Concept
 // Cannot directly import KiStammbaum.vue and test its internals like displayNodes generation without mounting or refactoring.
 // Instead, we will replicate the core clustering logic here for focused unit testing.
 
@@ -18,6 +18,7 @@ interface GraphNode extends Node {
   childNodes?: Node[];
   categoriesInCluster?: string[];
   categoryColorsInCluster?: string[];
+  dependencies?: string[]; // Added dependencies
 }
 
 // Mock D3 color scale
@@ -25,10 +26,10 @@ const mockColorScale = vi.fn((category: string) => `${category}-color`);
 
 // Replicated clustering logic (simplified for testing, focusing on displayNodes generation)
 function generateDisplayNodes(
-  filteredNodes: Node[],
+  filteredNodes: Node[], // Still Node[] as input, Concept[] will be compatible
   currentZoomScale: number,
   // Passing mock color scale for testing categoryColorsInCluster
-  colorScale: (category: string) => string
+  colorScale: (category: string) => string,
 ): GraphNode[] {
   const displayNodes: GraphNode[] = [];
 
@@ -36,7 +37,7 @@ function generateDisplayNodes(
     if (currentZoomScale < GLOBAL_CLUSTER_THRESHOLD) {
       const yearBucketSize = 50;
       const groupedByGlobalBuckets = new Map<number, Node[]>();
-      filteredNodes.forEach(node => {
+      filteredNodes.forEach((node) => {
         const bucket = Math.floor(node.year / yearBucketSize) * yearBucketSize;
         if (!groupedByGlobalBuckets.has(bucket)) {
           groupedByGlobalBuckets.set(bucket, []);
@@ -48,16 +49,24 @@ function generateDisplayNodes(
         const representativeYear = bucketYear + yearBucketSize / 2;
         const clusterId = `global-cluster-${bucketYear}`;
         const childNodes = [...nodesInBucket];
-        const categoriesInCluster = Array.from(new Set(childNodes.map(n => n.category)));
-        const categoryColorsInCluster = categoriesInCluster.map(cat => colorScale(cat));
+        const categoriesInCluster = Array.from(
+          new Set(
+            childNodes
+              .map((n) => n.category)
+              .filter((c) => c !== undefined) as string[],
+          ),
+        );
+        const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+          colorScale(cat),
+        ); // cat is now definitely string
 
         displayNodes.push({
           id: clusterId,
           year: representativeYear,
           category: 'global_cluster',
-          name: `${childNodes.length} items (ca. ${bucketYear} - ${bucketYear + yearBucketSize -1})`,
+          name: `${childNodes.length} items (ca. ${bucketYear} - ${bucketYear + yearBucketSize - 1})`,
           description: `Global cluster of ${childNodes.length} concepts from ${bucketYear} to ${bucketYear + yearBucketSize - 1}. Categories: ${categoriesInCluster.join(', ')}`,
-          dependencies: [], // Assuming clusters don't have direct dependencies for now
+          dependencies: [],
           isCluster: true,
           count: childNodes.length,
           childNodes: childNodes,
@@ -67,7 +76,7 @@ function generateDisplayNodes(
       });
     } else if (currentZoomScale < CATEGORY_DECADE_CLUSTER_THRESHOLD) {
       const groupedByDecadeAndCategory = new Map<string, Node[]>(); // Key: "decade-category"
-      filteredNodes.forEach(node => {
+      filteredNodes.forEach((node) => {
         const decade = Math.floor(node.year / 10) * 10;
         const key = `${decade}-${node.category}`;
         if (!groupedByDecadeAndCategory.has(key)) {
@@ -95,7 +104,7 @@ function generateDisplayNodes(
       });
     } else if (currentZoomScale < CATEGORY_YEAR_CLUSTER_THRESHOLD) {
       const groupedByYearAndCategory = new Map<string, Node[]>(); // Key: "year-category"
-       filteredNodes.forEach(node => {
+      filteredNodes.forEach((node) => {
         const key = `${node.year}-${node.category}`;
         if (!groupedByYearAndCategory.has(key)) {
           groupedByYearAndCategory.set(key, []);
@@ -120,7 +129,7 @@ function generateDisplayNodes(
             childNodes: originalNodesInGroup,
           });
         } else {
-          originalNodesInGroup.forEach(originalNode => {
+          originalNodesInGroup.forEach((originalNode) => {
             displayNodes.push({
               ...originalNode,
               isCluster: false,
@@ -129,8 +138,9 @@ function generateDisplayNodes(
           });
         }
       });
-    } else { // Highest Zoom
-      filteredNodes.forEach(originalNode => {
+    } else {
+      // Highest Zoom
+      filteredNodes.forEach((originalNode) => {
         displayNodes.push({
           ...originalNode,
           isCluster: false,
@@ -142,27 +152,115 @@ function generateDisplayNodes(
   return displayNodes;
 }
 
-
 describe('KiStammbaum.vue Clustering Logic', () => {
-  const sampleNodes: Node[] = [
-    { id: '1', name: 'Node 1', year: 1900, category: 'A', description: 'Desc 1', dependencies: [] },
-    { id: '2', name: 'Node 2', year: 1910, category: 'B', description: 'Desc 2', dependencies: [] },
-    { id: '3', name: 'Node 3', year: 1949, category: 'A', description: 'Desc 3', dependencies: [] }, // Same 50yr bucket as 1 & 2
-    { id: '4', name: 'Node 4', year: 1950, category: 'C', description: 'Desc 4', dependencies: [] }, // New 50yr bucket
-    { id: '5', name: 'Node 5', year: 1965, category: 'B', description: 'Desc 5', dependencies: [] }, // Same 50yr bucket as 4
-    { id: '6', name: 'Node 6', year: 1970, category: 'A', description: 'Desc 6', dependencies: [] }, // Same decade (70s) & category as 7
-    { id: '7', name: 'Node 7', year: 1975, category: 'A', description: 'Desc 7', dependencies: [] }, // Same decade (70s) & category as 6
-    { id: '8', name: 'Node 8', year: 1980, category: 'C', description: 'Desc 8', dependencies: [] }, // Single in decade-cat
-    { id: '9', name: 'Node 9', year: 1990, category: 'A', description: 'Desc 9', dependencies: [] }, // year-cat cluster with 10
-    { id: '10', name: 'Node 10', year: 1990, category: 'A', description: 'Desc 10', dependencies: [] },// year-cat cluster with 9
-    { id: '11', name: 'Node 11', year: 1991, category: 'B', description: 'Desc 11', dependencies: [] },// individual
-    { id: '12', name: 'Node 12', year: 2000, category: 'D', description: 'Desc 12', dependencies: [] },
+  const sampleNodes: Concept[] = [
+    // Changed Node[] to Concept[]
+    {
+      id: '1',
+      name: 'Node 1',
+      year: 1900,
+      category: 'A',
+      description: 'Desc 1',
+      dependencies: [],
+    },
+    {
+      id: '2',
+      name: 'Node 2',
+      year: 1910,
+      category: 'B',
+      description: 'Desc 2',
+      dependencies: [],
+    },
+    {
+      id: '3',
+      name: 'Node 3',
+      year: 1949,
+      category: 'A',
+      description: 'Desc 3',
+      dependencies: [],
+    },
+    {
+      id: '4',
+      name: 'Node 4',
+      year: 1950,
+      category: 'C',
+      description: 'Desc 4',
+      dependencies: [],
+    },
+    {
+      id: '5',
+      name: 'Node 5',
+      year: 1965,
+      category: 'B',
+      description: 'Desc 5',
+      dependencies: [],
+    },
+    {
+      id: '6',
+      name: 'Node 6',
+      year: 1970,
+      category: 'A',
+      description: 'Desc 6',
+      dependencies: [],
+    },
+    {
+      id: '7',
+      name: 'Node 7',
+      year: 1975,
+      category: 'A',
+      description: 'Desc 7',
+      dependencies: [],
+    },
+    {
+      id: '8',
+      name: 'Node 8',
+      year: 1980,
+      category: 'C',
+      description: 'Desc 8',
+      dependencies: [],
+    },
+    {
+      id: '9',
+      name: 'Node 9',
+      year: 1990,
+      category: 'A',
+      description: 'Desc 9',
+      dependencies: [],
+    },
+    {
+      id: '10',
+      name: 'Node 10',
+      year: 1990,
+      category: 'A',
+      description: 'Desc 10',
+      dependencies: [],
+    },
+    {
+      id: '11',
+      name: 'Node 11',
+      year: 1991,
+      category: 'B',
+      description: 'Desc 11',
+      dependencies: [],
+    },
+    {
+      id: '12',
+      name: 'Node 12',
+      year: 2000,
+      category: 'D',
+      description: 'Desc 12',
+      dependencies: [],
+    },
   ];
 
   describe('Global Clustering (Low Zoom)', () => {
     it('should form global clusters for zoom < GLOBAL_CLUSTER_THRESHOLD', () => {
       const zoomScale = 0.4; // Below GLOBAL_CLUSTER_THRESHOLD (0.5)
-      const result = generateDisplayNodes(sampleNodes, zoomScale, mockColorScale);
+      const result = generateDisplayNodes(
+        sampleNodes,
+        zoomScale,
+        mockColorScale,
+      );
 
       // Expected buckets:
       // 1900-1949: Node 1, 2, 3 (3 nodes, Cat A, B)
@@ -170,28 +268,44 @@ describe('KiStammbaum.vue Clustering Logic', () => {
       // 2000-2049: Node 12 (1 node, Cat D)
       expect(result).toHaveLength(3);
 
-      const cluster1900 = result.find(n => n.id === 'global-cluster-1900');
+      const cluster1900 = result.find((n) => n.id === 'global-cluster-1900');
       expect(cluster1900).toBeDefined();
       expect(cluster1900?.isCluster).toBe(true);
       expect(cluster1900?.category).toBe('global_cluster');
       expect(cluster1900?.count).toBe(3);
-      expect(cluster1900?.childNodes).toEqual(expect.arrayContaining([sampleNodes[0], sampleNodes[1], sampleNodes[2]]));
-      expect(cluster1900?.categoriesInCluster).toEqual(expect.arrayContaining(['A', 'B']));
-      expect(cluster1900?.categoryColorsInCluster).toEqual(expect.arrayContaining(['A-color', 'B-color']));
+      expect(cluster1900?.childNodes).toEqual(
+        expect.arrayContaining([
+          sampleNodes[0],
+          sampleNodes[1],
+          sampleNodes[2],
+        ]),
+      );
+      expect(cluster1900?.categoriesInCluster).toEqual(
+        expect.arrayContaining(['A', 'B']),
+      );
+      expect(cluster1900?.categoryColorsInCluster).toEqual(
+        expect.arrayContaining(['A-color', 'B-color']),
+      );
       expect(cluster1900?.name).toBe('3 items (ca. 1900 - 1949)');
 
-      const cluster1950 = result.find(n => n.id === 'global-cluster-1950');
+      const cluster1950 = result.find((n) => n.id === 'global-cluster-1950');
       expect(cluster1950).toBeDefined();
       expect(cluster1950?.count).toBe(8);
       expect(cluster1950?.childNodes?.length).toBe(8);
-      expect(cluster1950?.categoriesInCluster).toEqual(expect.arrayContaining(['C', 'B', 'A']));
-      expect(cluster1950?.categoryColorsInCluster).toEqual(expect.arrayContaining(['C-color', 'B-color', 'A-color']));
+      expect(cluster1950?.categoriesInCluster).toEqual(
+        expect.arrayContaining(['C', 'B', 'A']),
+      );
+      expect(cluster1950?.categoryColorsInCluster).toEqual(
+        expect.arrayContaining(['C-color', 'B-color', 'A-color']),
+      );
       expect(cluster1950?.name).toBe('8 items (ca. 1950 - 1999)');
 
-      const cluster2000 = result.find(n => n.id === 'global-cluster-2000');
+      const cluster2000 = result.find((n) => n.id === 'global-cluster-2000');
       expect(cluster2000).toBeDefined();
       expect(cluster2000?.count).toBe(1);
-      expect(cluster2000?.childNodes).toEqual(expect.arrayContaining([sampleNodes[11]]));
+      expect(cluster2000?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[11]]),
+      );
       expect(cluster2000?.categoriesInCluster).toEqual(['D']);
       expect(cluster2000?.categoryColorsInCluster).toEqual(['D-color']);
       expect(cluster2000?.name).toBe('1 items (ca. 2000 - 2049)');
@@ -202,7 +316,11 @@ describe('KiStammbaum.vue Clustering Logic', () => {
   describe('Category-Decade Clustering (Mid Zoom 1)', () => {
     it('should form category-decade clusters for zoom between GLOBAL and CATEGORY_DECADE thresholds', () => {
       const zoomScale = 0.9; // Between 0.5 and 1.0
-      const result = generateDisplayNodes(sampleNodes, zoomScale, mockColorScale);
+      const result = generateDisplayNodes(
+        sampleNodes,
+        zoomScale,
+        mockColorScale,
+      );
 
       // Expected:
       // Decade 1900, Cat A: Node 1 (1)
@@ -233,29 +351,41 @@ describe('KiStammbaum.vue Clustering Logic', () => {
       // cat-decade-cluster-2000-D (Node 12)
       expect(result).toHaveLength(10);
 
-      const cluster1970A = result.find(n => n.id === 'cat-decade-cluster-1970-A');
+      const cluster1970A = result.find(
+        (n) => n.id === 'cat-decade-cluster-1970-A',
+      );
       expect(cluster1970A).toBeDefined();
       expect(cluster1970A?.isCluster).toBe(true);
       expect(cluster1970A?.category).toBe('A');
       expect(cluster1970A?.year).toBe(1975); // Mid-point of decade
       expect(cluster1970A?.count).toBe(2);
-      expect(cluster1970A?.childNodes).toEqual(expect.arrayContaining([sampleNodes[5], sampleNodes[6]]));
+      expect(cluster1970A?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[5], sampleNodes[6]]),
+      );
       expect(cluster1970A?.name).toBe('2 A (1970s)');
 
-      const cluster1990A = result.find(n => n.id === 'cat-decade-cluster-1990-A');
+      const cluster1990A = result.find(
+        (n) => n.id === 'cat-decade-cluster-1990-A',
+      );
       expect(cluster1990A).toBeDefined();
       expect(cluster1990A?.isCluster).toBe(true);
       expect(cluster1990A?.category).toBe('A');
       expect(cluster1990A?.count).toBe(2);
-      expect(cluster1990A?.childNodes).toEqual(expect.arrayContaining([sampleNodes[8], sampleNodes[9]]));
+      expect(cluster1990A?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[8], sampleNodes[9]]),
+      );
       expect(cluster1990A?.name).toBe('2 A (1990s)');
 
       // Check one single-node "cluster" to verify behavior
-      const cluster1900A = result.find(n => n.id === 'cat-decade-cluster-1900-A');
+      const cluster1900A = result.find(
+        (n) => n.id === 'cat-decade-cluster-1900-A',
+      );
       expect(cluster1900A).toBeDefined();
       expect(cluster1900A?.isCluster).toBe(true); // As per current logic
       expect(cluster1900A?.count).toBe(1);
-      expect(cluster1900A?.childNodes).toEqual(expect.arrayContaining([sampleNodes[0]]));
+      expect(cluster1900A?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[0]]),
+      );
       expect(cluster1900A?.name).toBe('1 A (1900s)');
     });
   });
@@ -263,7 +393,11 @@ describe('KiStammbaum.vue Clustering Logic', () => {
   describe('Category-Year Clustering (Mid Zoom 2)', () => {
     it('should form category-year clusters for zoom between CATEGORY_DECADE and CATEGORY_YEAR thresholds', () => {
       const zoomScale = 1.6; // Between 1.0 and 1.8
-      const result = generateDisplayNodes(sampleNodes, zoomScale, mockColorScale);
+      const result = generateDisplayNodes(
+        sampleNodes,
+        zoomScale,
+        mockColorScale,
+      );
       // Expected:
       // Nodes 1,2,3,4,5 are individual (isCluster: false, count: 1)
       // Nodes 6,7 (1970, A) form cat-year-cluster-1970-A (count 2)
@@ -273,25 +407,33 @@ describe('KiStammbaum.vue Clustering Logic', () => {
       // Total: 12 nodes in sample. 2 clusters take 4 nodes. 12-4 = 8 individual nodes. 8+2 = 10 display items.
       expect(result).toHaveLength(10);
 
-      const cluster1970A = result.find(n => n.id === 'cat-year-cluster-1970-A');
+      const cluster1970A = result.find(
+        (n) => n.id === 'cat-year-cluster-1970-A',
+      );
       expect(cluster1970A).toBeDefined();
       expect(cluster1970A?.isCluster).toBe(true);
       expect(cluster1970A?.category).toBe('A');
       expect(cluster1970A?.year).toBe(1970);
       expect(cluster1970A?.count).toBe(2);
-      expect(cluster1970A?.childNodes).toEqual(expect.arrayContaining([sampleNodes[5], sampleNodes[6]]));
+      expect(cluster1970A?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[5], sampleNodes[6]]),
+      );
       expect(cluster1970A?.name).toBe('2 A (1970)');
 
-      const cluster1990A = result.find(n => n.id === 'cat-year-cluster-1990-A');
+      const cluster1990A = result.find(
+        (n) => n.id === 'cat-year-cluster-1990-A',
+      );
       expect(cluster1990A).toBeDefined();
       expect(cluster1990A?.isCluster).toBe(true);
       expect(cluster1990A?.category).toBe('A');
       expect(cluster1990A?.year).toBe(1990);
       expect(cluster1990A?.count).toBe(2);
-      expect(cluster1990A?.childNodes).toEqual(expect.arrayContaining([sampleNodes[8], sampleNodes[9]]));
+      expect(cluster1990A?.childNodes).toEqual(
+        expect.arrayContaining([sampleNodes[8], sampleNodes[9]]),
+      );
       expect(cluster1990A?.name).toBe('2 A (1990)');
 
-      const individualNode1 = result.find(n => n.id === '1');
+      const individualNode1 = result.find((n) => n.id === '1');
       expect(individualNode1).toBeDefined();
       expect(individualNode1?.isCluster).toBe(false);
       expect(individualNode1?.count).toBe(1);
@@ -301,7 +443,11 @@ describe('KiStammbaum.vue Clustering Logic', () => {
   describe('Individual Nodes (High Zoom)', () => {
     it('should show individual nodes for zoom >= CATEGORY_YEAR_THRESHOLD', () => {
       const zoomScale = 2.0; // >= CATEGORY_YEAR_THRESHOLD (1.8)
-      const result = generateDisplayNodes(sampleNodes, zoomScale, mockColorScale);
+      const result = generateDisplayNodes(
+        sampleNodes,
+        zoomScale,
+        mockColorScale,
+      );
 
       expect(result).toHaveLength(sampleNodes.length);
       result.forEach((node, index) => {

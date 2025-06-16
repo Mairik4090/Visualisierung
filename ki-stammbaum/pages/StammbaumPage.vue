@@ -5,12 +5,12 @@
     <Timeline
       v-if="allGraphDataForTimeline.nodes.length"
       :nodes="allGraphDataForTimeline.nodes"
+      :highlight-node-id="overallHoveredNodeId"
+      :external-range="mainViewVisibleRange"
       @range-change-end="updateCurrentYearRange"
       @year-selected="onYearSelected"
       @node-clicked-in-timeline="handleNodeClickedInTimeline"
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
-      :highlight-node-id="overallHoveredNodeId"
-      :external-range="mainViewVisibleRange"
     />
 
     <div
@@ -35,24 +35,27 @@
       :nodes="stammbaumGraph.nodes"
       :links="stammbaumGraph.links"
       :current-year-range="currentYearRange"
+      :highlight-node-id="overallHoveredNodeId"
+      :selected-node-id="selected?.id"
+      :target-zoom-level="pageCurrentZoomLevel"
       @concept-selected="selectConcept"
       @center-on-year="handleCenterOnYear"
       @node-hovered="handleNodeHoveredInTree"
-      :highlight-node-id="overallHoveredNodeId"
-      :selected-node-id="selected?.id"
       @main-view-range-changed="handleMainViewRangeChange"
-      :target-zoom-level="pageCurrentZoomLevel"
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
     <Legend :categories="legendCategories" />
     <FilterControls @filters-applied="onFilters" />
-    <ZoomControls :current-level="pageCurrentZoomLevel" @update:current-level="pageCurrentZoomLevel = $event" />
+    <ZoomControls
+      :current-level="pageCurrentZoomLevel"
+      @update:current-level="pageCurrentZoomLevel = $event"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-  definePageMeta({ layout: 'default' });
+  definePageMeta({ layout: 'default-layout' });
 
   import { computed, ref, watch } from 'vue';
   import * as d3 from 'd3';

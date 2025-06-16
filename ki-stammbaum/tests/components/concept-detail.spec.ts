@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mount, VueWrapper } from '@vue/test-utils';
 import ConceptDetail from '@/components/ConceptDetail.vue';
 import type { Concept } from '@/types/concept';
@@ -20,7 +20,8 @@ const BaseModalStub = {
 const NodeTimelineStub = {
   name: 'NodeTimeline',
   props: ['concept'],
-  template: '<div class="node-timeline-stub">Node Timeline for {{ concept?.name }}</div>',
+  template:
+    '<div class="node-timeline-stub">Node Timeline for {{ concept?.name }}</div>',
 };
 
 const mockConcept: Concept = {
@@ -39,7 +40,7 @@ const mockConcept: Concept = {
 };
 
 describe('ConceptDetail.vue', () => {
-  let wrapper: VueWrapper<any>;
+  let wrapper: VueWrapper<InstanceType<typeof ConceptDetail>>;
 
   function mountComponent(concept: Concept | null = mockConcept) {
     wrapper = mount(ConceptDetail, {
@@ -68,9 +69,15 @@ describe('ConceptDetail.vue', () => {
     // and the prop values are concept.year and concept.description.
     // The component maps concept.year to "Year of Origin" and concept.description to "Short Description"
     // (as per the template <p><strong>Year of Origin:</strong> {{ concept.year }}</p>)
-    expect(wrapper.html()).toContain(`<strong>Name:</strong> ${mockConcept.name}`);
-    expect(wrapper.html()).toContain(`<strong>Year of Origin:</strong> ${mockConcept.year}`);
-    expect(wrapper.html()).toContain(`<strong>Short Description:</strong> ${mockConcept.description}`); // In the component, concept.description is used for "Short Description"
+    expect(wrapper.html()).toContain(
+      `<strong>Name:</strong> ${mockConcept.name}`,
+    );
+    expect(wrapper.html()).toContain(
+      `<strong>Year of Origin:</strong> ${mockConcept.year}`,
+    );
+    expect(wrapper.html()).toContain(
+      `<strong>Short Description:</strong> ${mockConcept.description}`,
+    ); // In the component, concept.description is used for "Short Description"
   });
 
   it('displays placeholder texts for influence sections', () => {
@@ -79,10 +86,16 @@ describe('ConceptDetail.vue', () => {
     expect(influenceSections.length).toBe(2);
 
     expect(influenceSections[0].find('h3').text()).toBe('Beinflusst von:');
-    expect(influenceSections[0].find('p').text()).toBe('[Informationen demnächst verfügbar]');
+    expect(influenceSections[0].find('p').text()).toBe(
+      '[Informationen demnächst verfügbar]',
+    );
 
-    expect(influenceSections[1].find('h3').text()).toBe('Dieses Konzept beeinflusste:');
-    expect(influenceSections[1].find('p').text()).toBe('[Informationen demnächst verfügbar]');
+    expect(influenceSections[1].find('h3').text()).toBe(
+      'Dieses Konzept beeinflusste:',
+    );
+    expect(influenceSections[1].find('p').text()).toBe(
+      '[Informationen demnächst verfügbar]',
+    );
   });
 
   it('emits @close event when the close button inside the component is clicked', async () => {
@@ -113,6 +126,8 @@ describe('ConceptDetail.vue', () => {
     const nodeTimeline = wrapper.findComponent(NodeTimelineStub);
     expect(nodeTimeline.exists()).toBe(true);
     // The stub will render the name if concept is passed correctly
-    expect(nodeTimeline.text()).toContain(`Node Timeline for ${mockConcept.name}`);
+    expect(nodeTimeline.text()).toContain(
+      `Node Timeline for ${mockConcept.name}`,
+    );
   });
 });

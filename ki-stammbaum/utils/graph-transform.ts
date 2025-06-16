@@ -44,7 +44,11 @@ export function transformToGraph(concepts: Concept[]): Graph {
       const reverseLinkKey = `${targetId}-${sourceId}`;
 
       // Add link if it's not a self-loop and neither the link nor its reverse already exists.
-      if (sourceId !== targetId && !existingLinksSet.has(linkKey) && !existingLinksSet.has(reverseLinkKey)) {
+      if (
+        sourceId !== targetId &&
+        !existingLinksSet.has(linkKey) &&
+        !existingLinksSet.has(reverseLinkKey)
+      ) {
         links.push({ source: sourceId, target: targetId });
         existingLinksSet.add(linkKey); // Add the forward key to the set.
       }
@@ -62,7 +66,8 @@ export function transformToGraph(concepts: Concept[]): Graph {
         (otherNode) =>
           otherNode.id !== currentNode.id &&
           otherNode.category === currentNode.category &&
-          (otherNode.year === currentNode.year || otherNode.year === currentNode.year + 1),
+          (otherNode.year === currentNode.year ||
+            otherNode.year === currentNode.year + 1),
       )
       .sort((a, b) => {
         if (a.year !== b.year) {
@@ -82,12 +87,18 @@ export function transformToGraph(concepts: Concept[]): Graph {
       // Avoid self-loops (already handled by filter: otherNode.id !== currentNode.id).
       // For links within the same year, ensure a canonical direction (e.g., from smaller ID to larger ID)
       // to prevent creating two links (A->B and B->A) for the same pair due to this heuristic.
-      if (currentNode.year === targetNode.year && sourceNodeId >= targetNodeId) {
+      if (
+        currentNode.year === targetNode.year &&
+        sourceNodeId >= targetNodeId
+      ) {
         continue;
       }
 
       // Add link if it (or its reverse) doesn't already exist.
-      if (!existingLinksSet.has(linkKey) && !existingLinksSet.has(reverseLinkKey)) {
+      if (
+        !existingLinksSet.has(linkKey) &&
+        !existingLinksSet.has(reverseLinkKey)
+      ) {
         links.push({ source: sourceNodeId, target: targetNodeId });
         existingLinksSet.add(linkKey); // Add the forward key.
         h1LinksAdded++;
@@ -120,7 +131,10 @@ export function transformToGraph(concepts: Concept[]): Graph {
       const reverseLinkKey = `${targetNodeId}-${sourceNodeId}`;
 
       // Avoid self-loops (already filtered by otherNode.id !== currentNode.id)
-      if (!existingLinksSet.has(linkKey) && !existingLinksSet.has(reverseLinkKey)) {
+      if (
+        !existingLinksSet.has(linkKey) &&
+        !existingLinksSet.has(reverseLinkKey)
+      ) {
         links.push({ source: sourceNodeId, target: targetNodeId });
         existingLinksSet.add(linkKey);
         h2LinksAdded++;

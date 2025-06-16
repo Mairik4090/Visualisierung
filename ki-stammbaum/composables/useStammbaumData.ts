@@ -1,12 +1,16 @@
 import { shallowRef, type Ref } from 'vue';
 import { useRuntimeConfig } from '#app';
 
+import type { Concept } from '@/types/concept'; // Import Concept
+
 /**
  * Interface für die Struktur der Stammbaum-Daten
  */
 export interface StammbaumData {
-  nodes: any[];
-  [key: string]: any;
+  nodes: Concept[];
+  // Removed index signature: [key: string]: any;
+  // If other specific top-level properties are expected from ki-stammbaum.json,
+  // they should be explicitly defined here.
 }
 
 // Globaler Cache für die geladenen Daten - wird zwischen allen Composable-Instanzen geteilt
@@ -36,13 +40,7 @@ async function loadData(): Promise<void> {
     const result = await $fetch<StammbaumData>(url);
     dataCache.value = result;
   } catch (networkErr) {
-    try {
-      // Fallback auf statischen Import, falls kein Netzwerkzugriff möglich ist
-      const localModule = await import('~/public/data/ki-stammbaum.json');
-      dataCache.value = (localModule.default || localModule) as StammbaumData;
-    } catch (importErr) {
-      errorCache.value = importErr as Error;
-    }
+    errorCache.value = networkErr as Error; // Assign the network error directly
   } finally {
     pendingCache.value = false;
   }

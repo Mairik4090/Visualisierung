@@ -6,7 +6,9 @@ describe('FilterControls.vue', () => {
   it('renders two number inputs for Start Year and End Year, and a select for Type', () => {
     const wrapper = mount(FilterControls);
 
-    const numberInputs = wrapper.findAll<HTMLInputElement>('input[type="number"]');
+    const numberInputs = wrapper.findAll<HTMLInputElement>(
+      'input[type="number"]',
+    );
     expect(numberInputs.length).toBe(2);
 
     // Check for labels or placeholders to be more specific if needed
@@ -60,7 +62,7 @@ describe('FilterControls.vue', () => {
     expect(emittedEvents).toHaveLength(1);
     expect(emittedEvents![0][0]).toEqual({
       startYear: null, // Or NaN depending on how input[type=number] handles empty strings. Vue usually converts to null or empty string.
-      endYear: null,   // Let's assume it becomes null based on current component logic (ref<number | null>)
+      endYear: null, // Let's assume it becomes null based on current component logic (ref<number | null>)
       type: 'concept',
     });
   });
@@ -74,7 +76,7 @@ describe('FilterControls.vue', () => {
     const applyButton = wrapper.find('button');
 
     await startYearInput.setValue('2000'); // Set initial value
-    await endYearInput.setValue('2010');   // Set initial value
+    await endYearInput.setValue('2010'); // Set initial value
     await typeSelect.setValue('technology');
 
     // Clear the inputs - setting value to empty string for number input
@@ -94,7 +96,7 @@ describe('FilterControls.vue', () => {
     });
   });
 
-   it('emits filtersApplied event with empty type if "Alle" is selected', async () => {
+  it('emits filtersApplied event with empty type if "Alle" is selected', async () => {
     const wrapper = mount(FilterControls);
 
     const startYearInput = wrapper.find<HTMLInputElement>('#start-year-filter');
