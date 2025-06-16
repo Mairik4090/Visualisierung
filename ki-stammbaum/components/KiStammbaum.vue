@@ -1,17 +1,21 @@
-<template>
-  <div ref="container" class="stammbaum-container">
-    <svg ref="svg"></svg>
-    <div ref="tooltip" class="stammbaum-tooltip"></div>
-  </div>
-</template>
-
 <script setup lang="ts">
-  import { onMounted, onBeforeUnmount, ref, watch, type PropType, computed } from 'vue';
+  import {
+    onMounted,
+    onBeforeUnmount,
+    ref,
+    watch,
+    type PropType,
+    computed,
+  } from 'vue';
   import * as d3 from 'd3';
-  import { scaleLinear, scalePoint, scaleOrdinal, scaleSqrt, schemeCategory10 } from 'd3-scale';
-  import type { Node, Link } from '@/types/concept';
+  import type { Node, Link } from '../types/concept';
+  import type { GraphNode } from '../types/d3types';
 
   const ZOOM_LEVEL_SCALES = [0.3, 0.7, 1.2, 2.5];
+  let simulation: d3.Simulation<
+    GraphNode,
+    d3.SimulationLinkDatum<GraphNode>
+  > | null = null;
   const currentZoomLevel = ref(1);
   const ZOOM_SCALE_THRESHOLD = 0.05;
   const YEAR_RANGE_THRESHOLD = 1;
@@ -19,8 +23,12 @@
   let previousVisibleYearRange: [number, number] | null = null;
 
   const computedFilteredNodes = computed<Node[]>(() => {
-    if (!props.nodes || !props.nodes.length || !props.currentYearRange) return [];
-    console.log('[KiStammbaum Perf] Recalculating computedFilteredNodes. Range:', props.currentYearRange);
+    if (!props.nodes || !props.nodes.length || !props.currentYearRange)
+      return [];
+    console.log(
+      '[KiStammbaum Perf] Recalculating computedFilteredNodes. Range:',
+      props.currentYearRange,
+    );
     return props.nodes.filter(
       (node) =>
         node.year >= props.currentYearRange[0] &&
@@ -30,28 +38,157 @@
 
   const computedNodeCategories = computed(() => {
     console.log('[KiStammbaum Perf] Recalculating computedNodeCategories');
-    return Array.from(new Set(computedFilteredNodes.value.map(n => n.category).filter(Boolean))) as string[];
+    return Array.from(
+      new Set(
+        computedFilteredNodes.value.map((n) => n.category).filter(Boolean),
+      ),
+    ) as string[];
   });
 
   const computedCategoryColorScale = computed(() => {
     console.log('[KiStammbaum Perf] Recalculating computedCategoryColorScale');
-    return scaleOrdinal<string>(computedNodeCategories.value, schemeCategory10);
+    return d3
+      .scaleOrdinal<string, string>()
+      .domain(computedNodeCategories.value)
+      .range(d3.schemeCategory10);
   });
 
+  // User positioned nodes Map
+  const userPositionedNodes = ref(
+    new Map<string, { fx: number | null; fy: number | null }>(),
+  );
 
-  interface GraphNode extends Node {
-    x?: number;
-    y?: number;
-    fx?: number | null;
-    fy?: number | null;
-    previous_x?: number;
-    previous_y?: number;
-    isCluster?: boolean;
-    count?: number;
-    childNodes?: Node[];
-    categoriesInCluster?: string[];
-    categoryColorsInCluster?: string[];
-  }
+  const computedDisplayNodes = computed<GraphNode[]>(() => {
+    console.log(
+      '[KiStammbaum Perf] Recalculating computedDisplayNodes. Zoom Level:',
+      currentZoomLevel.value,
+    );
+    const nodesToDisplay: GraphNode[] = [];
+    const localFilteredNodes = computedFilteredNodes.value;
+    const localCategoryColorScale = computedCategoryColorScale.value;
+
+    if (localFilteredNodes.length > 0) {
+      switch (currentZoomLevel.value) {
+        case 1: {
+          const groupedByCenturyBlock = d3.group(
+            localFilteredNodes,
+            (d: Node) => Math.floor(d.year / 100) * 100,
+          );
+          groupedByCenturyBlock.forEach((nodesInBlock, startYear) => {
+            const representativeYear = startYear + 50;
+            const clusterId = `century-block-cluster-${startYear}`;
+            const childNodes = [...nodesInBlock];
+            const categoriesInCluster = Array.from(
+              new Set(childNodes.map((n) => n.category).filter(Boolean)),
+            ) as string[];
+            const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+              localCategoryColorScale(cat || ''),
+            );
+            nodesToDisplay.push({
+              id: clusterId,
+              year: representativeYear,
+              category: 'global_cluster',
+              name: `Concepts ${startYear}-${startYear + 99}`,
+              description: `Cluster of ${childNodes.length} concepts from ${startYear} to ${startYear + 99}. Categories: ${categoriesInCluster.join(', ')}`,
+              dependencies: [],
+              isCluster: true,
+              count: childNodes.length,
+              childNodes: childNodes,
+              categoriesInCluster: categoriesInCluster,
+              categoryColorsInCluster: categoryColorsInCluster,
+              fx: null,
+              fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
+            });
+          });
+          break;
+        }
+        case 2: {
+          const groupedByCentury = d3.group(
+            localFilteredNodes,
+            (d: Node) => Math.floor(d.year / 100) * 100,
+          );
+          groupedByCentury.forEach((nodesInCentury, centuryStartYear) => {
+            const groupedByQuarter = d3.group(
+              nodesInCentury,
+              (d: Node) => Math.floor(d.year / 25) * 25,
+            );
+            groupedByQuarter.forEach((nodesInQuarter, quarterStartYear) => {
+              const representativeYear = quarterStartYear + 12.5;
+              const clusterId = `quarter-cluster-${quarterStartYear}`;
+              const childNodes = [...nodesInQuarter];
+              const categoriesInCluster = Array.from(
+                new Set(childNodes.map((n) => n.category).filter(Boolean)),
+              ) as string[];
+              const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+                localCategoryColorScale(cat || ''),
+              );
+              nodesToDisplay.push({
+                id: clusterId,
+                year: representativeYear,
+                category: 'quarter_cluster',
+                name: `Concepts ${quarterStartYear}-${quarterStartYear + 24}`,
+                description: `Cluster of ${childNodes.length} concepts from ${quarterStartYear} to ${quarterStartYear + 24}. Categories: ${categoriesInCluster.join(', ')}`,
+                dependencies: [],
+                isCluster: true,
+                count: childNodes.length,
+                childNodes: childNodes,
+                categoriesInCluster: categoriesInCluster,
+                categoryColorsInCluster: categoryColorsInCluster,
+                fx: null,
+                fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
+              });
+            });
+          });
+          break;
+        }
+        case 3: {
+          const groupedByDecade = d3.group(
+            localFilteredNodes,
+            (d: Node) => Math.floor(d.year / 10) * 10,
+          );
+          groupedByDecade.forEach((nodesInDecade, decadeStartYear) => {
+            const representativeYear = decadeStartYear + 5;
+            const clusterId = `decade-cluster-${decadeStartYear}`;
+            const childNodes = [...nodesInDecade];
+            const categoriesInCluster = Array.from(
+              new Set(childNodes.map((n) => n.category).filter(Boolean)),
+            ) as string[];
+            const categoryColorsInCluster = categoriesInCluster.map((cat) =>
+              localCategoryColorScale(cat || ''),
+            );
+            nodesToDisplay.push({
+              id: clusterId,
+              year: representativeYear,
+              category: 'decade_cluster',
+              name: `Concepts ${decadeStartYear}-${decadeStartYear + 9}`,
+              description: `Cluster of ${childNodes.length} concepts from ${decadeStartYear} to ${decadeStartYear + 9}. Categories: ${categoriesInCluster.join(', ')}`,
+              dependencies: [],
+              isCluster: true,
+              count: childNodes.length,
+              childNodes: childNodes,
+              categoriesInCluster: categoriesInCluster,
+              categoryColorsInCluster: categoryColorsInCluster,
+              fx: null,
+              fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
+            });
+          });
+          break;
+        }
+        case 4:
+        default:
+          // At max zoom, show individual nodes
+          nodesToDisplay.push(
+            ...localFilteredNodes.map((node) => ({
+              ...node,
+              fx: null,
+              fy: userPositionedNodes.value.get(node.id)?.fy ?? null,
+            })),
+          );
+          break;
+      }
+    }
+    return nodesToDisplay;
+  });
 
   const props = defineProps({
     nodes: { type: Array as PropType<Node[] | undefined> },
@@ -78,7 +215,6 @@
   const tooltip = ref<HTMLElement | null>(null);
   let resizeObserver: ResizeObserver | null = null;
 
-  let simulation: d3.Simulation<GraphNode, Link> | null = null;
   let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
   let lastTransform: d3.ZoomTransform = d3.zoomIdentity;
   let currentFrameClusterInfo = new Map<
@@ -89,12 +225,19 @@
     string,
     { x: number; y: number; childNodeOriginalIds: string[] }
   >();
-  const userPositionedNodes = ref<Map<string, { fy: number }>>(new Map());
-
   let xScale: d3.ScaleLinear<number, number> | null = null;
   let yScale: d3.ScalePoint<string> | null = null;
   // categoryColorScale is now computedCategoryColorScale and used directly where needed via computedCategoryColorScale.value
-  let radiusScale: d3.ScaleSqrt<number, number> | null = null;
+  let radiusScale: d3.ScaleLinear<number, number> | null = null;
+
+  // Hilfsfunktion für Radius-Berechnung
+  const calculateRadius = (node: GraphNode): number => {
+    if (!radiusScale) return 5; // Fallback wenn Scale nicht initialisiert
+    if (node.isCluster && typeof node.count === 'number') {
+      return radiusScale(node.count);
+    }
+    return radiusScale(1); // Default für einzelne Nodes oder Cluster ohne Count
+  };
 
   let previousDisplayNodeIdsSignature = ref<string>('');
   let previousVisualLinksSignature = ref<string>('');
@@ -127,9 +270,9 @@
       const minVisibleDataX = lastTransform.invertX(0);
       const maxVisibleDataX = lastTransform.invertX(currentWidth);
       if (typeof xScale.invert !== 'function') {
-          console.warn('[KiStammbaum Zoom] xScale.invert is not a function.');
-          return;
-        }
+        console.warn('[KiStammbaum Zoom] xScale.invert is not a function.');
+        return;
+      }
       const minVisibleYear = xScale.invert(minVisibleDataX);
       const maxVisibleYear = xScale.invert(maxVisibleDataX);
       const currentZoomScaleK = lastTransform.k; // Renamed to avoid conflict
@@ -147,24 +290,34 @@
 
       // Ensure minYear is not greater than maxYear before emitting or comparing
       if (roundedMinVisibleYear > roundedMaxVisibleYear) {
-          // This can happen during elastic bounces of the zoom.
-          // console.warn(`[KiStammbaum Zoom] Invalid year range: ${roundedMinVisibleYear} > ${roundedMaxVisibleYear}. Ignoring.`);
-          return;
+        // This can happen during elastic bounces of the zoom.
+        // console.warn(`[KiStammbaum Zoom] Invalid year range: ${roundedMinVisibleYear} > ${roundedMaxVisibleYear}. Ignoring.`);
+        return;
       }
 
       if (
         previousVisibleYearRange === null ||
-        Math.abs(roundedMinVisibleYear - previousVisibleYearRange[0]) >= YEAR_RANGE_THRESHOLD ||
-        Math.abs(roundedMaxVisibleYear - previousVisibleYearRange[1]) >= YEAR_RANGE_THRESHOLD
+        Math.abs(roundedMinVisibleYear - previousVisibleYearRange[0]) >=
+          YEAR_RANGE_THRESHOLD ||
+        Math.abs(roundedMaxVisibleYear - previousVisibleYearRange[1]) >=
+          YEAR_RANGE_THRESHOLD
       ) {
         shouldEmitRangeChange = true;
       }
 
       if (shouldEmitRangeChange) {
-        console.log('[KiStammbaum Perf] processZoomLogic: Emitting mainViewRangeChanged.');
+        console.log(
+          '[KiStammbaum Perf] processZoomLogic: Emitting mainViewRangeChanged.',
+        );
         previousZoomScale = currentZoomScaleK;
-        previousVisibleYearRange = [roundedMinVisibleYear, roundedMaxVisibleYear];
-        emit('mainViewRangeChanged', [roundedMinVisibleYear, roundedMaxVisibleYear]);
+        previousVisibleYearRange = [
+          roundedMinVisibleYear,
+          roundedMaxVisibleYear,
+        ];
+        emit('mainViewRangeChanged', [
+          roundedMinVisibleYear,
+          roundedMaxVisibleYear,
+        ]);
         // The call to render() is removed from here.
         // The watcher on props.currentYearRange (via stammbaum.vue) will trigger debouncedRender.
       }
@@ -273,10 +426,10 @@
   function setupSimulation(
     nodes: GraphNode[],
     links: d3.SimulationLinkDatum<GraphNode>[],
-  ) {
-    if (!svg.value) return;
-    simulation = d3
-      .forceSimulation(nodes)
+  ): d3.Simulation<GraphNode, d3.SimulationLinkDatum<GraphNode>> | null {
+    if (!svg.value) return null;
+    const newSimulation = d3
+      .forceSimulation<GraphNode>(nodes)
       .force(
         'link',
         d3
@@ -284,10 +437,13 @@
           .id((d: GraphNode) => d.id)
           .distance(60),
       )
-      .force('charge', d3.forceManyBody().strength(-120))
+      .force('charge', d3.forceManyBody<GraphNode>().strength(-120))
       .force('x', d3.forceX<GraphNode>((d) => d.x!).strength(0.3))
       .force('y', d3.forceY<GraphNode>((d) => d.y!).strength(0.05))
       .on('tick', ticked);
+
+    simulation = newSimulation;
+    return newSimulation;
   }
 
   function ticked() {
@@ -349,14 +505,13 @@
 
     const filteredNodes = computedFilteredNodes.value;
     if (!svg.value || filteredNodes.length === 0) {
-       // Clear SVG content if there are no filtered nodes
+      // Clear SVG content if there are no filtered nodes
       if (svg.value) {
         const svgSel = d3.select(svg.value as SVGSVGElement);
         svgSel.selectAll('.chart-content > *').remove(); // Clear previous drawings
       }
       return;
     }
-
 
     const svgSel = d3.select(svg.value as SVGSVGElement);
     const width = svg.value.clientWidth || 600;
@@ -419,15 +574,18 @@
     // Ensure SVG is cleared if no displayable nodes.
     // Also ensure svg.value itself is checked, as render can be called before mount in some scenarios.
     if (displayNodes.length === 0 && filteredNodes.length > 0 && svg.value) {
-        const svgSel = d3.select(svg.value as SVGSVGElement);
-        svgSel.selectAll('.chart-content > *').remove();
-        return;
+      const svgSel = d3.select(svg.value as SVGSVGElement);
+      svgSel.selectAll('.chart-content > *').remove();
+      return;
     }
     // Update xScale
     const currentXRange: [number, number] = [40, width - 40];
     if (!xScale) {
       console.log('[KiStammbaum Perf] Creating xScale');
-      xScale = scaleLinear().domain(props.currentYearRange).range(currentXRange);
+      xScale = d3
+        .scaleLinear()
+        .domain(props.currentYearRange)
+        .range(currentXRange);
     } else {
       console.log('[KiStammbaum Perf] Updating domain/range for xScale');
       xScale.domain(props.currentYearRange).range(currentXRange);
@@ -440,21 +598,35 @@
     const currentYRange: [number, number] = [40, height - 40];
     if (!yScale) {
       console.log('[KiStammbaum Perf] Creating yScale');
-      yScale = scalePoint<string>()
-        .domain(categoriesForYScale.length > 0 ? categoriesForYScale : ['default_category_for_empty_scale'])
+      yScale = d3
+        .scalePoint<string>()
+        .domain(
+          categoriesForYScale.length > 0
+            ? categoriesForYScale
+            : ['default_category_for_empty_scale'],
+        )
         .range(currentYRange);
     } else {
       console.log('[KiStammbaum Perf] Updating domain/range for yScale');
-      yScale.domain(categoriesForYScale.length > 0 ? categoriesForYScale : ['default_category_for_empty_scale'])
-            .range(currentYRange);
+      yScale
+        .domain(
+          categoriesForYScale.length > 0
+            ? categoriesForYScale
+            : ['default_category_for_empty_scale'],
+        )
+        .range(currentYRange);
     }
 
     // Update radiusScale (it depends on displayNodes, so it's updated after displayNodes are determined)
-    const maxCount = d3.max(displayNodes, d => d.isCluster && d.count ? d.count : 1) || 1;
+    const maxCount =
+      d3.max(displayNodes, (d) => (d.isCluster && d.count ? d.count : 1)) || 1;
     const currentRadiusRange: [number, number] = [6, 22]; // Example
     if (!radiusScale) {
       console.log('[KiStammbaum Perf] Creating radiusScale');
-      radiusScale = scaleSqrt().domain([1, maxCount]).range(currentRadiusRange);
+      radiusScale = d3
+        .scaleSqrt()
+        .domain([1, maxCount])
+        .range(currentRadiusRange);
     } else {
       console.log('[KiStammbaum Perf] Updating domain/range for radiusScale');
       radiusScale.domain([1, maxCount]).range(currentRadiusRange);
@@ -497,7 +669,10 @@
         event: d3.D3ZoomEvent<SVGSVGElement, unknown>,
       ) => {
         console.log('[KiStammbaum Zoom Handler] Zoom event triggered.');
-        console.log('[KiStammbaum Zoom Handler] event.transform:', event.transform);
+        console.log(
+          '[KiStammbaum Zoom Handler] event.transform:',
+          event.transform,
+        );
         console.log(
           '[KiStammbaum Zoom Handler] event.sourceEvent:',
           event.sourceEvent,
@@ -792,12 +967,20 @@
       .attr('y', (d) => (d.previous_y ?? d.y ?? 0) - 12);
     const labelUpdateAndEnter = labelEnter.merge(labelSelection);
 
-    const currentDisplayNodeIdsSignature = displayNodes.map(n => n.id).sort().join(',');
-    const currentVisualLinksSignature = visualLinks.map(l => `${(l.source as GraphNode).id}-${(l.target as GraphNode).id}`).sort().join(',');
+    const currentDisplayNodeIdsSignature = displayNodes
+      .map((n) => n.id)
+      .sort()
+      .join(',');
+    const currentVisualLinksSignature = visualLinks
+      .map((l) => `${(l.source as GraphNode).id}-${(l.target as GraphNode).id}`)
+      .sort()
+      .join(',');
 
     if (props.usePhysics) {
       let didStructureChange = false;
-      if (currentDisplayNodeIdsSignature !== previousDisplayNodeIdsSignature.value) {
+      if (
+        currentDisplayNodeIdsSignature !== previousDisplayNodeIdsSignature.value
+      ) {
         console.log('[KiStammbaum Perf] Display node structure changed (IDs).');
         didStructureChange = true;
       }
@@ -808,22 +991,33 @@
 
       if (!simulation) {
         console.log('[KiStammbaum Perf] Setting up new simulation.');
-        setupSimulation(displayNodes, visualLinks);
-        simulation?.alpha(1).restart();
+        const newSimulation = setupSimulation(displayNodes, visualLinks);
+        if (newSimulation) {
+          newSimulation.alpha(1);
+          newSimulation.restart();
+        }
       } else {
         if (didStructureChange) {
-          console.log('[KiStammbaum Perf] Updating simulation nodes/links and RESTARTING.');
+          console.log(
+            '[KiStammbaum Perf] Updating simulation nodes/links and RESTARTING.',
+          );
           simulation.nodes(displayNodes);
-          (simulation.force('link') as d3.ForceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>).links(visualLinks);
+          (
+            simulation.force('link') as d3.ForceLink<
+              GraphNode,
+              d3.SimulationLinkDatum<GraphNode>
+            >
+          ).links(visualLinks);
           simulation.alpha(1).restart();
         } else {
-           // console.log('[KiStammbaum Perf] Simulation structure UNCHANGED. Positions might update via fx/fy if changed by scales.');
-           // If fx/fy on nodes changed due to scale updates, the simulation will pick those up if it's running.
-           // If it had stopped (alpha ~ 0), it might need a nudge.
-           if (simulation.alpha() < 0.05 && displayNodes.length > 0) { // Check if simulation has cooled significantly
-             // console.log('[KiStammbaum Perf] Gently reheating simulation.');
-             // simulation.alphaTarget(0.01).restart(); // A very gentle reheat.
-           }
+          // console.log('[KiStammbaum Perf] Simulation structure UNCHANGED. Positions might update via fx/fy if changed by scales.');
+          // If fx/fy on nodes changed due to scale updates, the simulation will pick those up if it's running.
+          // If it had stopped (alpha ~ 0), it might need a nudge.
+          if (simulation.alpha() < 0.05 && displayNodes.length > 0) {
+            // Check if simulation has cooled significantly
+            // console.log('[KiStammbaum Perf] Gently reheating simulation.');
+            // simulation.alphaTarget(0.01).restart(); // A very gentle reheat.
+          }
         }
       }
       previousDisplayNodeIdsSignature.value = currentDisplayNodeIdsSignature;
@@ -831,12 +1025,7 @@
 
       // Direct styling, simulation will handle positions in 'ticked'
       nodeUpdateAndEnter
-        .attr('r', (d: GraphNode) => {
-          if (d.isCluster && d.count) {
-            return radiusScale(d.count);
-          }
-          return radiusScale(1); // Default for individual nodes or clusters without count
-        })
+        .attr('r', calculateRadius)
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
           d.id === props.highlightNodeId ? 'orange' : '#fff',
@@ -853,12 +1042,7 @@
         .duration(transitionDuration)
         .attr('cx', (d: GraphNode) => d.x!)
         .attr('cy', (d: GraphNode) => d.y!)
-        .attr('r', (d: GraphNode) => {
-          if (d.isCluster && d.count) {
-            return radiusScale(d.count);
-          }
-          return radiusScale(1); // Default for individual nodes or clusters without count
-        })
+        .attr('r', calculateRadius)
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
           d.id === props.highlightNodeId ? 'orange' : '#fff',
@@ -960,18 +1144,20 @@
     const targetX = xScale(subjectNode.year);
 
     if (props.usePhysics) {
-      if (!event.active) simulation?.alphaTarget(0);
+      if (!event.active && simulation) {
+        simulation.alphaTarget(0);
+      }
       // For physics, only fix X, allow Y to be determined by simulation unless user specifically sets it.
       // The drag sets fx, fy. If Y is meant to be free, fy should be cleared after drag unless persistent user Y is desired.
       // For now, keep fx, but set fy based on current drag position to allow some Y adjustment.
       subjectNode.fx = targetX; // Snap X back to its year scale
       subjectNode.fy = event.y; // Keep Y where dragged for physics
-      userPositionedNodes.value.set(subjectNode.id, { fy: event.y });
+      userPositionedNodes.value.set(subjectNode.id, { fx: null, fy: event.y });
     } else {
       // Non-physics: position is directly set
       subjectNode.x = targetX; // Snap X
       subjectNode.y = event.y; // Keep Y where dragged
-      userPositionedNodes.value.set(subjectNode.id, { fy: event.y });
+      userPositionedNodes.value.set(subjectNode.id, { fx: null, fy: event.y });
 
       // Transition the node and associated elements to the new snapped X and dragged Y
       d3.select(event.sourceEvent.target as SVGCircleElement)
@@ -1030,276 +1216,109 @@
       // selectedNodeId could be added if it affects styling that requires a re-render.
     ],
     () => {
-      console.log('[KiStammbaum Perf] Main data watcher (props.nodes, links, range, highlight) triggered debouncedRender.');
+      console.log(
+        '[KiStammbaum Perf] Main data watcher (props.nodes, links, range, highlight) triggered debouncedRender.',
+      );
       debouncedRender();
     },
-    { deep: false }
+    { deep: false },
   );
 
   // Watch for changes in computedDisplayNodes that might not be caught by the above watcher,
   // e.g. if zoom level changes, computedDisplayNodes identity changes.
-  watch(computedDisplayNodes, (newDisplayNodes, oldDisplayNodes) => {
-    // Check if the actual content/structure has changed, not just the reactive proxy
-    const newSig = newDisplayNodes.map(n => n.id).sort().join(',');
-    const oldSig = oldDisplayNodes ? oldDisplayNodes.map(n => n.id).sort().join(',') : '';
+  watch(
+    computedDisplayNodes,
+    (newDisplayNodes, oldDisplayNodes) => {
+      // Check if the actual content/structure has changed, not just the reactive proxy
+      const newSig = newDisplayNodes
+        .map((n) => n.id)
+        .sort()
+        .join(',');
+      const oldSig = oldDisplayNodes
+        ? oldDisplayNodes
+            .map((n) => n.id)
+            .sort()
+            .join(',')
+        : '';
 
-    if (newSig !== oldSig) {
-        console.log('[KiStammbaum Perf] computedDisplayNodes structural change detected, calling debouncedRender.');
+      if (newSig !== oldSig) {
+        console.log(
+          '[KiStammbaum Perf] computedDisplayNodes structural change detected, calling debouncedRender.',
+        );
         debouncedRender();
-    } else {
+      } else {
         // console.log('[KiStammbaum Perf] computedDisplayNodes changed, but signature is the same. May not need full re-render.');
         // This case might happen if internal properties of nodes change but not their IDs or count.
         // For now, any change to computedDisplayNodes (even if just reactivity update) could imply a render.
         // However, the more specific check above is better.
         // If only fx/fy changed on existing nodes, the simulation handles it if running.
         // If not running, render() will re-apply positions.
-    }
-  }, { deep: false }); // deep: false because we primarily care about the array reference or its structural ID changes.
-
-
-  watch(() => props.usePhysics, (isPhysicsEnabled) => {
-    console.log('[KiStammbaum Perf] usePhysics watcher triggered. New value:', isPhysicsEnabled);
-    if (isPhysicsEnabled) {
-      const currentNodes = computedDisplayNodes.value;
-      if (currentNodes.length > 0) {
-        const currentLinks = generateLinksForZoomLevel(currentNodes, props.links || [], currentZoomLevel.value);
-        if (!simulation) {
-            console.log('[KiStammbaum Perf] usePhysics watcher: No simulation, setting up.');
-            setupSimulation(currentNodes, currentLinks);
-        } else {
-            console.log('[KiStammbaum Perf] usePhysics watcher: Updating nodes/links for existing sim.');
-            simulation.nodes(currentNodes);
-            (simulation.force('link') as d3.ForceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>).links(currentLinks);
-        }
-        console.log('[KiStammbaum Perf] usePhysics watcher: Restarting simulation.');
-        simulation?.alpha(1).restart();
-        previousDisplayNodeIdsSignature.value = currentNodes.map(n => n.id).sort().join(',');
-        previousVisualLinksSignature.value = currentLinks.map(l => `${(l.source as GraphNode).id}-${(l.target as GraphNode).id}`).sort().join(',');
-      }
-    } else {
-      console.log('[KiStammbaum Perf] usePhysics watcher: Physics disabled, stopping simulation.');
-      simulation?.stop();
-    }
-    debouncedRender();
-  });
-
-  watch(
-    () => props.targetZoomLevel,
-    (newTargetLevel, oldTargetLevel) => {
-      console.log(
-        '[KiStammbaum Zoom Watch] TargetZoomLevel changed. New:',
-        newTargetLevel,
-        'Old:',
-        oldTargetLevel,
-      );
-      if (
-        newTargetLevel !== undefined &&
-        newTargetLevel !== currentZoomLevel.value
-      ) {
-        if (newTargetLevel >= 1 && newTargetLevel <= ZOOM_LEVEL_SCALES.length) {
-          console.log(
-            '[KiStammbaum Zoom Watch] currentZoomLevel.value before update:',
-            currentZoomLevel.value,
-          );
-          const targetScale = ZOOM_LEVEL_SCALES[newTargetLevel - 1];
-          console.log('[KiStammbaum Zoom Watch] Calculated targetScale:', targetScale);
-          const svgInstance = svg.value;
-          if (svgInstance && zoomBehavior) {
-            currentZoomLevel.value = newTargetLevel; // Set current level before calling zoom
-            const currentWidth = svgInstance.clientWidth;
-            const currentHeight = svgInstance.clientHeight;
-            const currentTransform = lastTransform;
-            const newX =
-              currentWidth / 2 -
-              (currentWidth / 2 - currentTransform.x) *
-                (targetScale / currentTransform.k);
-            const newY =
-              currentHeight / 2 -
-              (currentHeight / 2 - currentTransform.y) *
-                (targetScale / currentTransform.k);
-            const newTransform = d3.zoomIdentity
-              .translate(newX, newY)
-              .scale(targetScale);
-            console.log(
-              '[KiStammbaum Zoom Watch] newTransform to be applied:',
-              newTransform,
-            );
-            d3.select(svgInstance as unknown as Element)
-              .transition()
-              .duration(300)
-              .call(zoomBehavior.transform as any, newTransform)
-              .on('end', () => {
-                console.log(
-                  '[KiStammbaum Zoom Watch] Transition ended for targetZoomLevel change.',
-                );
-                lastTransform =
-                  newTransform; /* processZoomLogic will be called by zoom handler */
-              });
-          }
-        }
       }
     },
-  );
+    { deep: false },
+  ); // deep: false because we primarily care about the array reference or its structural ID changes.
 
-  const computedDisplayNodes = computed<GraphNode[]>(() => {
-    console.log('[KiStammbaum Perf] Recalculating computedDisplayNodes. Zoom Level:', currentZoomLevel.value);
-    const nodesToDisplay: GraphNode[] = [];
-    const localFilteredNodes = computedFilteredNodes.value;
-    const localCategoryColorScale = computedCategoryColorScale.value;
+  watch(
+    () => props.usePhysics,
+    (isPhysicsEnabled) => {
+      console.log(
+        '[KiStammbaum Perf] usePhysics watcher triggered. New value:',
+        isPhysicsEnabled,
+      );
+      if (isPhysicsEnabled) {
+        const currentNodes = computedDisplayNodes.value;
+        if (currentNodes.length > 0) {
+          const currentLinks = generateLinksForZoomLevel(
+            currentNodes,
+            props.links || [],
+            currentZoomLevel.value,
+          );
+          if (!simulation) {
+            console.log(
+              '[KiStammbaum Perf] usePhysics watcher: No simulation, setting up.',
+            );
+            setupSimulation(currentNodes, currentLinks);
+          } else {
+            console.log(
+              '[KiStammbaum Perf] usePhysics watcher: Updating nodes/links for existing sim.',
+            );
+            simulation.nodes(currentNodes);
+            (
+              simulation.force('link') as d3.ForceLink<
+                GraphNode,
+                d3.SimulationLinkDatum<GraphNode>
+              >
+            ).links(currentLinks);
+          }
 
-    if (localFilteredNodes.length > 0) {
-      switch (currentZoomLevel.value) {
-        case 1: {
-          const groupedByCenturyBlock = d3.group(
-            localFilteredNodes,
-            (d: Node) => Math.floor(d.year / 100) * 100,
-          );
-          groupedByCenturyBlock.forEach((nodesInBlock, startYear) => {
-            const representativeYear = startYear + 50;
-            const clusterId = `century-block-cluster-${startYear}`;
-            const childNodes = [...nodesInBlock];
-            const categoriesInCluster = Array.from(
-              new Set(childNodes.map((n) => n.category).filter(Boolean)),
-            ) as string[];
-            const categoryColorsInCluster = categoriesInCluster.map((cat) =>
-              localCategoryColorScale(cat || ''),
+          // CORRECTED PART:
+          // Safely restart the simulation only if it exists.
+          if (simulation) {
+            console.log(
+              '[KiStammbaum Perf] usePhysics watcher: Restarting simulation.',
             );
-            nodesToDisplay.push({
-              id: clusterId,
-              year: representativeYear,
-              category: 'global_cluster',
-              name: `Concepts ${startYear}-${startYear + 99}`,
-              description: `Cluster of ${childNodes.length} concepts from ${startYear} to ${startYear + 99}. Categories: ${categoriesInCluster.join(', ')}`,
-              dependencies: [],
-              isCluster: true,
-              count: childNodes.length,
-              childNodes: childNodes,
-              categoriesInCluster: categoriesInCluster,
-              categoryColorsInCluster: categoryColorsInCluster,
-              fx: null,
-              fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
-            });
-          });
-          break;
+            simulation.alpha(1).restart();
+          }
+
+          previousDisplayNodeIdsSignature.value = currentNodes
+            .map((n) => n.id)
+            .sort()
+            .join(',');
+          previousVisualLinksSignature.value = currentLinks
+            .map(
+              (l) =>
+                `${(l.source as GraphNode).id}-${(l.target as GraphNode).id}`,
+            )
+            .sort()
+            .join(',');
         }
-        case 2: {
-          const groupedByCentury = d3.group(
-            localFilteredNodes,
-            (d: Node) => Math.floor(d.year / 100) * 100,
-          );
-          groupedByCentury.forEach((nodesInCentury, centuryStartYear) => {
-            const representativeYear = centuryStartYear + 50;
-            const clusterId = `century-cluster-${centuryStartYear}`;
-            const childNodes = [...nodesInCentury];
-            const categoriesInCluster = Array.from(
-              new Set(
-                childNodes
-                  .map((n) => n.category)
-                  .filter((c): c is string => c !== undefined && c !== null),
-              ),
-            );
-            const categoryColorsInCluster = categoriesInCluster.map((cat) =>
-              localCategoryColorScale(cat),
-            );
-            nodesToDisplay.push({
-              id: clusterId,
-              year: representativeYear,
-              category: 'century_cluster',
-              name: `Concepts of the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 || centuryStartYear === 1900 ? 'th' : 'th'} Century`,
-              description: `Cluster of ${childNodes.length} concepts from the ${centuryStartYear / 100 + 1}${centuryStartYear === 1800 || centuryStartYear === 1900 ? 'th' : 'th'} century.`,
-              dependencies: [],
-              isCluster: true,
-              count: childNodes.length,
-              childNodes: childNodes,
-              categoriesInCluster: categoriesInCluster,
-              categoryColorsInCluster: categoryColorsInCluster,
-              fx: null,
-              fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
-            });
-          });
-          break;
-        }
-        case 3: {
-          const groupedByDecadeAndCategory = d3.group(
-            localFilteredNodes,
-            (d: Node) => Math.floor(d.year / 10) * 10,
-            (d: Node) => d.category,
-          );
-          groupedByDecadeAndCategory.forEach((categoriesInDecade, decade) => {
-            categoriesInDecade.forEach((childNodesInGroup, category) => {
-              const representativeYear = decade + 5;
-              const clusterId = `decade-cat-cluster-${decade}-${category}`;
-              nodesToDisplay.push({
-                id: clusterId,
-                year: representativeYear,
-                category: category || '',
-                name: `${childNodesInGroup.length} ${category} (${decade}s)`,
-                description: `Cluster of ${childNodesInGroup.length} ${category} concepts from the ${decade}s`,
-                dependencies: [],
-                isCluster: true,
-                count: childNodesInGroup.length,
-                childNodes: childNodesInGroup,
-                fx: null,
-                fy: userPositionedNodes.value.get(clusterId)?.fy ?? null,
-              });
-            });
-          });
-          break;
-        }
-        case 4:
-        default: {
-          localFilteredNodes.forEach((originalNode) => {
-            const userSetFy = userPositionedNodes.value.get(
-              originalNode.id,
-            )?.fy;
-            const individualGraphNode: GraphNode = {
-              ...originalNode,
-              isCluster: false,
-              count: 1,
-              fx: null,
-              fy: userSetFy ?? null,
-            };
-            // Add previous_x and previous_y from parent cluster if transitioning
-            // This logic requires previousFrameClusterInfo to be accessible here.
-            // For simplicity in this step, we might omit this part of the logic if it complicates the diff too much,
-            // and re-evaluate if animations are incorrect.
-            // However, it's better to keep it if possible.
-            for (const prevClusterData of previousFrameClusterInfo.value.values()) { // Ensure .value for ref
-              if (
-                prevClusterData.childNodeOriginalIds.includes(originalNode.id)
-              ) {
-                individualGraphNode.previous_x = prevClusterData.x;
-                individualGraphNode.previous_y = prevClusterData.y;
-                break;
-              }
-            }
-            nodesToDisplay.push(individualGraphNode);
-          });
-          break;
-        }
+      } else {
+        console.log(
+          '[KiStammbaum Perf] usePhysics watcher: Physics disabled, stopping simulation.',
+        );
+        simulation?.stop();
       }
-    }
-    return nodesToDisplay;
-  });
+      debouncedRender();
+    },
+  );
 </script>
-
-<style scoped>
-  .stammbaum-container {
-    width: 100%;
-    height: 600px; /* Or other appropriate default height */
-    position: relative;
-  }
-
-  .stammbaum-tooltip {
-    position: absolute;
-    opacity: 0;
-    background-color: white;
-    border: 1px solid #ccc;
-    padding: 8px;
-    border-radius: 4px;
-    pointer-events: none; /* Important so it doesn't interfere with mouse events on SVG */
-    font-size: 0.9em;
-    z-index: 10;
-    transition: opacity 0.2s;
-  }
-</style>

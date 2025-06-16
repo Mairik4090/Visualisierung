@@ -37,9 +37,14 @@ async function loadData(): Promise<void> {
       // Fallback to network fetch if local import fails
       const config = useRuntimeConfig();
       const base = config.app.baseURL || '/';
-      const result = await $fetch<StammbaumData>(
+      const fetchUrl = new URL(
         '/public/data/ki-stammbaum.json',
-      );
+        base,
+      ).toString();
+      const result = await $fetch<StammbaumData>(fetchUrl, {
+        retry: 3, // Add retry logic
+        retryDelay: 1000, // Wait 1 second between retries
+      });
       dataCache.value = result;
     } catch (networkErr) {
       errorCache.value = networkErr as Error;
