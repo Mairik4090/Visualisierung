@@ -523,6 +523,12 @@
       )
       .range([40, height - 40]);
 
+    // Define radius scale based on current displayNodes
+    const maxCount = d3.max(displayNodes, d => d.isCluster && d.count ? d.count : 1) || 1;
+    // Min radius for individual nodes or smallest clusters, max for largest clusters.
+    // Range can be adjusted based on visual preference.
+    const radiusScale = d3.scaleSqrt().domain([1, maxCount]).range([6, 22]);
+
     displayNodes.forEach((n: GraphNode) => {
       if (
         xScale &&
@@ -709,6 +715,7 @@
     const linkEnter = linkSelection
       .enter()
       .append('line')
+      .attr('stroke', '#999') // Set default link color
       .attr('stroke-opacity', 0)
       .attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#arrowhead)');
@@ -870,9 +877,12 @@
 
       // Direct styling, simulation will handle positions in 'ticked'
       nodeUpdateAndEnter
-        .attr('r', (d: GraphNode) =>
-          d.isCluster ? (d.count && d.count > 10 ? 14 : 10) : 6,
-        )
+        .attr('r', (d: GraphNode) => {
+          if (d.isCluster && d.count) {
+            return radiusScale(d.count);
+          }
+          return radiusScale(1); // Default for individual nodes or clusters without count
+        })
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
           d.id === props.highlightNodeId ? 'orange' : '#fff',
@@ -889,9 +899,12 @@
         .duration(transitionDuration)
         .attr('cx', (d: GraphNode) => d.x!)
         .attr('cy', (d: GraphNode) => d.y!)
-        .attr('r', (d: GraphNode) =>
-          d.isCluster ? (d.count && d.count > 10 ? 14 : 10) : 6,
-        )
+        .attr('r', (d: GraphNode) => {
+          if (d.isCluster && d.count) {
+            return radiusScale(d.count);
+          }
+          return radiusScale(1); // Default for individual nodes or clusters without count
+        })
         .style('opacity', 1)
         .attr('stroke', (d: GraphNode) =>
           d.id === props.highlightNodeId ? 'orange' : '#fff',

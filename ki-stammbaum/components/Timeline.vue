@@ -13,10 +13,6 @@
   import * as d3 from 'd3';
   import type { Node } from '@/types/concept';
 
-  // Timeline-specific zoom thresholds
-  const TIMELINE_CLUSTER_THRESHOLD_DECADE = 1.2; // Below this, cluster by decade
-  const TIMELINE_CLUSTER_THRESHOLD_YEAR = 2.0; // Below this (and above DECADE), cluster by year and category
-
   // Interface for items displayed on the timeline (can be original nodes or clusters)
   interface TimelineDisplayItem extends Partial<Node> {
     // Use Partial<Node> to allow overriding/adding properties
@@ -53,6 +49,18 @@
     externalRange: {
       type: Object as PropType<[number, number] | null>,
       default: null,
+    },
+    /**
+     * The current zoom level of the main KiStammbaum view (1-4).
+     * This is used to synchronize clustering behavior between the tree and the timeline.
+     * Level 1: Century Block (Tree) -> Decade (Timeline)
+     * Level 2: Century (Tree) -> Decade (Timeline)
+     * Level 3: Decade and Category (Tree) -> Year and Category (Timeline)
+     * Level 4: Individual Nodes (Tree) -> Individual Nodes (Timeline)
+     */
+    kiStammbaumZoomLevel: {
+      type: Number,
+      required: true,
     },
   });
 
@@ -108,14 +116,13 @@
 
     // Angepasste X-Skala basierend auf Zoom-Transform
     const zx = transform.rescaleX(x);
-    const currentZoomLevel = transform.k;
+    // const currentZoomLevel = transform.k; // No longer used for clustering decisions
 
     let displayableTimelineItems: TimelineDisplayItem[] = [];
 
-    // --- START TIMELINE CLUSTERING LOGIC ---
+    // --- START TIMELINE CLUSTERING LOGIC based on kiStammbaumZoomLevel ---
     if (props.nodes && props.nodes.length > 0) {
-      if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_DECADE) {
-        // Cluster by Decade
+      if (props.kiStammbaumZoomLevel <= 2) { // KiStammbaum Levels 1 & 2 (Century/Century Block) -> Timeline: Decade Cluster
         const decadeBuckets = d3.group(
           props.nodes,
           (d) => Math.floor(d.year / 10) * 10,
@@ -140,8 +147,7 @@
             categoryColorsInCluster,
           });
         });
-      } else if (currentZoomLevel < TIMELINE_CLUSTER_THRESHOLD_YEAR) {
-        // Cluster by Year and Category
+      } else if (props.kiStammbaumZoomLevel === 3) { // KiStammbaum Level 3 (Decade & Category) -> Timeline: Year & Category Cluster
         const yearCategoryBuckets = d3.group(
           props.nodes,
           (d) => d.year,
@@ -149,8 +155,7 @@
         );
         yearCategoryBuckets.forEach((categoriesInYear, year) => {
           categoriesInYear.forEach((childNodes, category) => {
-            if (childNodes.length > 1) {
-              // Only cluster if more than one item
+            if (childNodes.length > 1) { // Only cluster if more than one item
               displayableTimelineItems.push({
                 id: `timeline-year-cat-cluster-${year}-${category}`,
                 year: year,
@@ -161,8 +166,7 @@
                 name: `${childNodes.length} ${category} (${year})`,
                 description: `Cluster of ${childNodes.length} ${category} items for ${year}`,
               });
-            } else {
-              // Push single nodes as individual items
+            } else { // Push single nodes as individual items
               childNodes.forEach((node) => {
                 displayableTimelineItems.push({
                   ...node,
@@ -174,8 +178,7 @@
             }
           });
         });
-      } else {
-        // Show Individual Nodes (highest zoom level)
+      } else { // KiStammbaum Level 4 (Individual Nodes) -> Timeline: Individual Nodes
         props.nodes.forEach((node) => {
           displayableTimelineItems.push({
             ...node,
@@ -373,13 +376,14 @@
       })
       // Zoom End Event Handler
       .on('end', (ev) => {
+        // If this 'end' event was triggered by a programmatic zoom (via externalRange watcher),
+        // we only need to reset the flag. The source of truth for the range is external,
+        // so we don't emit 'rangeChangeEnd' to avoid potential loops.
         if (isProgrammaticZoom) {
-          isProgrammaticZoom = false; // Reset flag
-          // Potentially emit final range only if it was a user drag on timeline itself
-          const finalXScale = ev.transform.rescaleX(x);
-          emit('rangeChangeEnd', finalXScale.domain() as [number, number]);
-          return;
+          isProgrammaticZoom = false;
+          return; // Do not emit 'rangeChangeEnd'
         }
+        // If the zoom was user-initiated directly on the timeline, then emit the final range.
         const finalXScale = ev.transform.rescaleX(x);
         emit('rangeChangeEnd', finalXScale.domain() as [number, number]);
       });
@@ -432,81 +436,134 @@
   watch(
     () => props.nodes,
     async () => {
+      // When nodes change, re-render. Clustering will be re-evaluated based on current kiStammbaumZoomLevel.
       render();
       await nextTick();
     },
     { deep: true },
   );
 
+  watch(() => props.kiStammbaumZoomLevel, async () => {
+    // When kiStammbaumZoomLevel changes, re-render to apply new clustering.
+    // Need to ensure x scale and other D3 elements are initialized.
+    if (svg.value && x && nodesGroup && axisGroup && zoomBehavior) {
+        // We are not changing the underlying data (props.nodes) here,
+        // nor the zoom transform of the timeline itself directly.
+        // We just need to redraw the existing view with new clustering rules.
+        // The current D3 transform is preserved.
+        draw(d3.zoomTransform(svg.value as SVGSVGElement));
+    } else {
+        // If D3 setup is not complete, render will handle it.
+        // This might happen on initial load if kiStammbaumZoomLevel is set very early.
+        render();
+    }
+    await nextTick();
+  });
+
   /**
    * Watches for changes in the `externalRange` prop.
    * When `externalRange` is updated (e.g., by the main KiStammbaum view),
    * this watcher adjusts the timeline's zoom and pan to match the new visible year range.
    */
-  // watch(() => props.externalRange, (newRange) => {
-  //   // Ensure all necessary D3 objects and the new range are valid.
-  //   if (newRange && newRange.length === 2 && svg.value && zoomBehavior && x) {
-  //     const [minExt, maxExt] = newRange;
-  //
-  //     // Get the current visible domain of the timeline based on its own D3 zoom transform.
-  //     const currentTransform = d3.zoomTransform(svg.value);
-  //     const currentVisibleDomain = currentTransform.rescaleX(x).domain();
-  //
-  //     // Optimization: If the new external range is already very close to the current visible range,
-  //     // skip the update to prevent minor oscillations or redundant calculations.
-  //     if (Math.abs(currentVisibleDomain[0] - minExt) < 1 && Math.abs(currentVisibleDomain[1] - maxExt) < 1 && currentVisibleDomain[0] <= currentVisibleDomain[1]) {
-  //       return;
-  //     }
-  //     // Ignore invalid ranges where min year is greater than or equal to max year.
-  //     if (minExt >= maxExt) {
-  //       return;
-  //     }
-  //
-  //     // Set the flag to indicate that the upcoming zoom event is programmatic.
-  //     // This prevents the 'zoom' event handler from emitting 'rangeChanged', avoiding a feedback loop.
-  //     isProgrammaticZoom = true;
-  //
-  //     // Get the pixel range of the x-axis (drawing area for the timeline).
-  //     const [rangeStart, rangeEnd] = x.range();
-  //     const effectiveWidth = rangeEnd - rangeStart; // The actual width available for rendering the domain.
-  //
-  //     // Calculate the new scale factor (k) required to fit the externalRange into the effectiveWidth.
-  //     // targetDomainSpanInPixels is how wide the externalRange (maxExt - minExt years) would be
-  //     // in pixels if drawn with the original, unzoomed x-scale.
-  //     const targetDomainSpanInPixels = x(maxExt) - x(minExt);
-  //
-  //     let newScale = currentTransform.k; // Default to current scale if calculation is problematic.
-  //     if (targetDomainSpanInPixels > 0 && effectiveWidth > 0) {
-  //        newScale = effectiveWidth / targetDomainSpanInPixels;
-  //     } else if (effectiveWidth === 0 && targetDomainSpanInPixels === 0) { // Both are zero, e.g. no width and no domain
-  //        newScale = currentTransform.k || 1; // Keep current or default to 1
-  //     } else if (targetDomainSpanInPixels === 0) { // Trying to show a zero-width domain (e.g. single year)
-  //       newScale = zoomBehavior.scaleExtent()[1]; // Use max zoom to "zoom in" maximally
-  //     }
-  //
-  //     // Calculate the translation (tx) required for the x-axis.
-  //     // The D3 zoom transform is such that: new_x_coord = original_x_coord * scale + translate.
-  //     // We want the `minExt` year, when scaled, to appear at `rangeStart` (left edge of drawing area).
-  //     // So, x(minExt) * newScale + targetTranslateX = rangeStart.
-  //     // targetTranslateX = rangeStart - (x(minExt) * newScale).
-  //     const targetTranslateX = rangeStart - (x(minExt) * newScale);
-  //
-  //     // Ensure the calculated scale is within the allowed min/max zoom levels.
-  //     const [minZoom, maxZoom] = zoomBehavior.scaleExtent();
-  //     const clampedScale = Math.max(minZoom, Math.min(maxZoom, newScale));
-  //
-  //     // Construct the new D3 zoom transform.
-  //     const newTransform = d3.zoomIdentity.translate(targetTranslateX, 0).scale(clampedScale);
-  //
-  //     // Apply the new transform to the SVG element, triggering a D3 zoom event.
-  //     // A short transition is used for smoothness.
-  //     d3.select(svg.value)
-  //       .transition()
-  //       .duration(isProgrammaticZoom ? 250 : 0) // Use a short duration for programmatic zoom.
-  //       .call(zoomBehavior.transform as any, newTransform);
-  //       // The `isProgrammaticZoom` flag will be reset in the 'end' event of this zoom action.
-  //   }
-  // }, { deep: true });
+  watch(() => props.externalRange, (newRange) => {
+    // Ensure all necessary D3 objects and the new range are valid.
+    if (newRange && newRange.length === 2 && svg.value && zoomBehavior && x && x.range && x.domain) {
+      const [minExt, maxExt] = newRange;
+
+      // Ignore invalid ranges where min year is greater than or equal to max year.
+      // Also, if the range is too small (e.g. difference is less than a small fraction of a year),
+      // it might lead to extreme zoom levels or instability.
+      // We allow minExt === maxExt for "zooming into a single year" type behavior.
+      if (minExt > maxExt) { // Only strictly greater, allowing minExt === maxExt
+        console.warn(`Timeline externalRange: Invalid range provided [${minExt}, ${maxExt}]. Min > Max.`);
+        return;
+      }
+
+      // Get the current visible domain of the timeline based on its own D3 zoom transform.
+      // This is NOT used for optimization anymore, as per requirements, externalRange is the source of truth.
+      // const currentTransform = d3.zoomTransform(svg.value);
+      // const currentVisibleDomain = currentTransform.rescaleX(x).domain();
+
+      // Set the flag to indicate that the upcoming zoom event is programmatic.
+      // This prevents the 'zoom' event handler from emitting 'rangeChanged' or 'rangeChangeEnd' (for this specific zoom),
+      // avoiding a feedback loop.
+      isProgrammaticZoom = true;
+
+      // Get the pixel range of the x-axis (drawing area for the timeline).
+      const [rangeStart, rangeEnd] = x.range(); // This is the output range in pixels
+      const effectiveWidth = rangeEnd - rangeStart; // The actual width available for rendering the domain.
+
+      if (effectiveWidth <= 0) {
+        console.warn('Timeline externalRange: effectiveWidth is zero or negative. Cannot apply range.');
+        isProgrammaticZoom = false; // Reset flag as we are aborting
+        return;
+      }
+
+      // Calculate the new scale factor (k) required to fit the externalRange into the effectiveWidth.
+      // The domain of x is in years. x(year) gives pixel position in original, unzoomed scale.
+      // targetDomainSpanInPixels is how wide the externalRange (maxExt - minExt years) would be
+      // in pixels if drawn with the original, unzoomed x-scale.
+      const targetDomainSpanInPixels = x(maxExt) - x(minExt);
+
+      let newScale;
+      const [minZoom, maxZoom] = zoomBehavior.scaleExtent();
+
+      if (minExt === maxExt) { // Special case: Zooming to a single point in time (e.g. a single year)
+        // We want to "zoom in" as much as reasonably possible, centered on this year.
+        // Set scale to maxZoom. The translation will center it.
+        newScale = maxZoom;
+      } else if (targetDomainSpanInPixels > 0) {
+         newScale = effectiveWidth / targetDomainSpanInPixels;
+      } else {
+        // This case (targetDomainSpanInPixels <= 0 but minExt !== maxExt) implies an issue with the x scale's domain or input,
+        // or minExt > maxExt (which should be caught above).
+        // Fallback to a default scale or current scale, and log a warning.
+        console.warn(`Timeline externalRange: targetDomainSpanInPixels is ${targetDomainSpanInPixels} with range [${minExt}, ${maxExt}]. Defaulting scale.`);
+        const currentTransform = d3.zoomTransform(svg.value);
+        newScale = currentTransform.k || 1; // Default to current scale or 1
+      }
+
+      // Ensure the calculated scale is within the allowed min/max zoom levels.
+      const clampedScale = Math.max(minZoom, Math.min(maxZoom, newScale));
+
+      // Calculate the translation (tx) required for the x-axis.
+      // The D3 zoom transform is: x_transformed = x_original * k + tx.
+      // We want the `minExt` year to appear at `rangeStart` (left edge of drawing area).
+      // So, x(minExt) * clampedScale + targetTranslateX = rangeStart.
+      // Therefore, targetTranslateX = rangeStart - (x(minExt) * clampedScale).
+      // If minExt === maxExt, we want to center the view on that year.
+      let targetTranslateX;
+      if (minExt === maxExt) {
+        // Center the view on x(minExt)
+        targetTranslateX = effectiveWidth / 2 - (x(minExt) * clampedScale);
+      } else {
+        targetTranslateX = rangeStart - (x(minExt) * clampedScale);
+      }
+
+
+      // Construct the new D3 zoom transform.
+      // Note: D3's transform order is translate then scale.
+      // So, if we use d3.zoomIdentity.translate(tx, ty).scale(k),
+      // the final transformation applied to a point p is (p * k) + t.
+      const newTransform = d3.zoomIdentity.translate(targetTranslateX, 0).scale(clampedScale);
+
+      // Apply the new transform to the SVG element, triggering a D3 zoom event.
+      // A short transition is used for smoothness.
+      d3.select(svg.value)
+        .transition()
+        .duration(250) // Use a short duration for programmatic zoom.
+        .call(zoomBehavior.transform as any, newTransform)
+        .on('end', () => {
+          // This 'end' event is for the transition initiated by the watcher.
+          // The main isProgrammaticZoom flag is reset by the zoomBehavior's 'end' handler.
+          // We can add specific logic here if needed after this particular transition finishes.
+        });
+      // The `isProgrammaticZoom` flag will be reset in the 'end' event of the main zoomBehavior.
+    }
+  }, { deep: true });
+</script>
+
+<style scoped>
 </script>
 
 <style scoped>

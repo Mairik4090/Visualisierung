@@ -11,6 +11,7 @@
       @node-hovered-in-timeline="handleNodeHoveredInTimeline"
       :highlight-node-id="overallHoveredNodeId"
       :external-range="mainViewVisibleRange"
+      :ki-stammbaum-zoom-level="pageCurrentZoomLevel"
     />
 
     <div
