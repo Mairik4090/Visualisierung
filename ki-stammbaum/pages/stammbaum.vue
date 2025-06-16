@@ -41,11 +41,13 @@
       :highlight-node-id="overallHoveredNodeId"
       :selected-node-id="selected?.id"
       @main-view-range-changed="handleMainViewRangeChange"
+      :target-zoom-level="pageCurrentZoomLevel"
     />
 
     <ConceptDetail :concept="selected" @close="selected = null" />
     <Legend :categories="legendCategories" />
     <FilterControls @filters-applied="onFilters" />
+    <ZoomControls :current-level="pageCurrentZoomLevel" @update:current-level="pageCurrentZoomLevel = $event" />
   </div>
 </template>
 
@@ -59,6 +61,7 @@
   import ConceptDetail from '@/components/ConceptDetail.vue';
   import Legend from '@/components/Legend.vue';
   import Timeline from '@/components/Timeline.vue';
+  import ZoomControls from '@/components/ZoomControls.vue'; // Import ZoomControls
   import { useStammbaumData } from '@/composables/useStammbaumData';
   import { transformToGraph, type Graph } from '@/utils/graph-transform'; // Imported Graph type
   import type { Node } from '@/types/concept'; // Added Node type import
@@ -95,6 +98,14 @@
   /** Shared hover state for cross-component highlighting */
   const overallHoveredNodeId = ref<string | null>(null);
   const mainViewVisibleRange = ref<[number, number] | null>(null);
+  /**
+   * The current zoom level of the page/main KiStammbaum component.
+   * Ranges from 1 (most zoomed out) to 4 (most zoomed in).
+   * This ref is passed to ZoomControls to indicate the active level,
+   * and updated by ZoomControls when the user selects a new level.
+   * It's also passed as `targetZoomLevel` to KiStammbaum to command its zoom state.
+   */
+  const pageCurrentZoomLevel = ref(1);
 
   /** Legenden-Daten: Kategorien mit Farben aus D3-Scheme */
   const legendCategories = computed(() => {
