@@ -294,6 +294,15 @@
   }
 
   function render(): void {
+    console.log('[KiStammbaum Render] Starting render function.');
+    console.log(
+      '[KiStammbaum Render] currentZoomLevel.value:',
+      currentZoomLevel.value,
+    );
+    console.log(
+      '[KiStammbaum Render] props.currentYearRange:',
+      props.currentYearRange,
+    );
     const currentFrameClusterInfo = new Map<
       string,
       { x: number; y: number; childNodeOriginalIds: string[] }
@@ -550,6 +559,12 @@
       const originalZoomHandler = (
         event: d3.D3ZoomEvent<SVGSVGElement, unknown>,
       ) => {
+        console.log('[KiStammbaum Zoom Handler] Zoom event triggered.');
+        console.log('[KiStammbaum Zoom Handler] event.transform:', event.transform);
+        console.log(
+          '[KiStammbaum Zoom Handler] event.sourceEvent:',
+          event.sourceEvent,
+        );
         if (!mainGroup) return;
         const currentScale = lastTransform.k;
         if (!event.transform) {
@@ -569,6 +584,10 @@
             );
           else if (eventScale < currentScale)
             targetLevel = Math.max(1, currentZoomLevel.value - 1);
+          console.log(
+            '[KiStammbaum Zoom Handler] User-initiated zoom. Calculated targetLevel:',
+            targetLevel,
+          );
         }
 
         if (
@@ -1060,13 +1079,24 @@
 
   watch(
     () => props.targetZoomLevel,
-    (newTargetLevel) => {
+    (newTargetLevel, oldTargetLevel) => {
+      console.log(
+        '[KiStammbaum Zoom Watch] TargetZoomLevel changed. New:',
+        newTargetLevel,
+        'Old:',
+        oldTargetLevel,
+      );
       if (
         newTargetLevel !== undefined &&
         newTargetLevel !== currentZoomLevel.value
       ) {
         if (newTargetLevel >= 1 && newTargetLevel <= ZOOM_LEVEL_SCALES.length) {
+          console.log(
+            '[KiStammbaum Zoom Watch] currentZoomLevel.value before update:',
+            currentZoomLevel.value,
+          );
           const targetScale = ZOOM_LEVEL_SCALES[newTargetLevel - 1];
+          console.log('[KiStammbaum Zoom Watch] Calculated targetScale:', targetScale);
           const svgInstance = svg.value;
           if (svgInstance && zoomBehavior) {
             currentZoomLevel.value = newTargetLevel; // Set current level before calling zoom
@@ -1084,11 +1114,18 @@
             const newTransform = d3.zoomIdentity
               .translate(newX, newY)
               .scale(targetScale);
+            console.log(
+              '[KiStammbaum Zoom Watch] newTransform to be applied:',
+              newTransform,
+            );
             d3.select(svgInstance as unknown as Element)
               .transition()
               .duration(300)
               .call(zoomBehavior.transform as any, newTransform)
               .on('end', () => {
+                console.log(
+                  '[KiStammbaum Zoom Watch] Transition ended for targetZoomLevel change.',
+                );
                 lastTransform =
                   newTransform; /* processZoomLogic will be called by zoom handler */
               });

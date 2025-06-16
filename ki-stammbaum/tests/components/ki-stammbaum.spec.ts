@@ -330,3 +330,79 @@ describe('KiStammbaum.vue Clustering Logic (Replicated)', () => {
     });
   });
 });
+
+// New describe block for component interaction tests
+import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import KiStammbaum from '@/components/KiStammbaum.vue';
+
+describe('KiStammbaum.vue Component Interaction', () => {
+  it('should react to targetZoomLevel prop changes', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log');
+
+    const wrapper = mount(KiStammbaum, {
+      props: {
+        nodes: [
+          {
+            id: 'n1',
+            name: 'Node 1',
+            year: 2000,
+            category: 'A',
+            description: 'Test node 1',
+            dependencies: [],
+          },
+        ],
+        links: [],
+        currentYearRange: [1990, 2010] as [number, number],
+        targetZoomLevel: 1,
+        usePhysics: false,
+      },
+    });
+
+    // Initial render might log, depending on component's full lifecycle
+    // Let's wait for any initial async operations triggered by mount
+    await nextTick(); // For setup
+    await nextTick(); // For potential first render/watchers
+
+    // Clear any logs that might have occurred during initial mount and setup
+    consoleLogSpy.mockClear();
+
+    await wrapper.setProps({ targetZoomLevel: 2 });
+    // Wait for Vue's reactivity and D3 transitions/callbacks
+    await nextTick(); // For prop update
+    await nextTick(); // For watcher execution
+    await nextTick(); // For D3 transition (if any immediate logging happens)
+    // Potentially need a longer timeout or a more robust way if D3 transitions are involved
+    // For now, we assume console logs happen reasonably quickly after prop change and nextTick
+
+    // Check specific logs related to zoom level change
+    // This relies on the console.log messages added in the previous subtask
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[KiStammbaum Zoom Watch] TargetZoomLevel changed. New: 2 Old: 1'),
+    );
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[KiStammbaum Zoom Watch] currentZoomLevel.value before update: 1'),
+    );
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[KiStammbaum Zoom Watch] Calculated targetScale: 0.7'), // ZOOM_LEVEL_SCALES[1]
+    );
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[KiStammbaum Zoom Watch] newTransform to be applied:'),
+      expect.anything(), // The transform object itself
+    );
+
+    // It's harder to reliably test the log inside .on('end') of D3 transition in a JSDOM environment
+    // without more complex mocking of D3 transitions or longer, flaky timeouts.
+    // We will also check for the render log with the new zoom level.
+    // This might require additional nextTicks or a flushPromises equivalent if render is further deferred.
+    await nextTick(); // allow for render cycle after zoom logic
+    await nextTick();
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[KiStammbaum Render] currentZoomLevel.value: 2')
+    );
+
+
+    vi.restoreAllMocks();
+  });
+});
