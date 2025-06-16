@@ -57,7 +57,7 @@
 <script setup lang="ts">
   definePageMeta({ layout: 'default' });
 
-  import { computed, ref, watch } from 'vue';
+  import { computed, ref, watch, watchEffect } from 'vue';
   import * as d3 from 'd3';
   import KiStammbaum from '@/components/KiStammbaum.vue';
   import FilterControls from '@/components/FilterControls.vue';
@@ -75,6 +75,45 @@
 
   /** Datenabruf */
   const { data, pending, error } = useStammbaumData();
+
+  watch(pending, (newVal, oldVal) => {
+    console.log(
+      '[StammbaumPage Pending Watch] Pending state changed from',
+      oldVal,
+      'to',
+      newVal,
+    );
+  });
+
+  watch(error, (newErr) => {
+    if (newErr)
+      console.error('[StammbaumPage Error Watch] Error detected:', newErr);
+  });
+
+  watch(
+    data,
+    (newData) => {
+      if (newData)
+        console.log('[StammbaumPage Data Watch] Data received:', newData);
+    },
+    { deep: false },
+  );
+
+  watchEffect(() => {
+    if (!pending.value && !error.value && data.value) {
+      console.log(
+        '[StammbaumPage] Conditions met to render KiStammbaum. Data available.',
+      );
+    } else if (pending.value) {
+      console.log(
+        '[StammbaumPage] Conditions NOT met to render KiStammbaum: Data is pending.',
+      );
+    } else if (error.value) {
+      console.error(
+        '[StammbaumPage] Conditions NOT met to render KiStammbaum: Error loading data.',
+      );
+    }
+  });
 
   /** Momentan ausgewähltes Konzept */
   const selected = ref<Node | null>(null); // Holds the currently selected concept node, or null if no node is selected.
@@ -101,6 +140,14 @@
   /** Shared hover state for cross-component highlighting */
   const overallHoveredNodeId = ref<string | null>(null);
   const mainViewVisibleRange = ref<[number, number] | null>(null);
+
+  watch(overallHoveredNodeId, (newNodeId, oldNodeId) => {
+    console.log(
+      `overallHoveredNodeId changed:
+        old: ${oldNodeId}
+        new: ${newNodeId}`,
+    );
+  });
   /**
    * The current zoom level of the page/main KiStammbaum component.
    * Ranges from 1 (most zoomed out) to 4 (most zoomed in).

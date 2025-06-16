@@ -205,3 +205,94 @@ describe('Timeline.vue Clustering Logic', () => {
     });
   });
 });
+
+// New describe block for component interaction tests
+import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import Timeline from '@/components/Timeline.vue'; // Adjust path as necessary
+
+describe('Timeline.vue Component Interaction', () => {
+  const sampleNodes: Node[] = [
+    { id: 't1', name: 'TNode 1', year: 1995, category: 'X', description: 'TDesc 1', dependencies: [] },
+    { id: 't2', name: 'TNode 2', year: 1998, category: 'Y', description: 'TDesc 2', dependencies: [] },
+  ];
+
+  it('should apply highlighting based on highlightNodeId prop', async () => {
+    const wrapper = mount(Timeline, {
+      props: {
+        nodes: sampleNodes,
+        highlightNodeId: null,
+      },
+      // Mock the SVG element and its clientWidth/Height as D3 relies on it for rendering
+      attachTo: document.body, // Mounting to body to ensure clientWidth/Height are available
+    });
+
+    // Wait for D3 to render initially
+    await nextTick(); // For Vue's initial render
+    await nextTick(); // For D3's rendering logic which might be in onMounted or watchers
+
+    // Check initial state: no node highlighted
+    // Note: D3 might take a moment to draw, especially in test environment.
+    // We need to ensure the SVG has been populated by D3.
+    // A simple check for any rect element can be a proxy for D3 having run.
+    expect(wrapper.find('svg rect').exists()).toBe(true);
+
+
+    let highlightedRectT1 = wrapper.find('rect[data-id="t1"][data-highlighted="true"]');
+    expect(highlightedRectT1.exists()).toBe(false);
+    let highlightedRectT2 = wrapper.find('rect[data-id="t2"][data-highlighted="true"]');
+    expect(highlightedRectT2.exists()).toBe(false);
+
+    // Update prop to highlight 't1'
+    await wrapper.setProps({ highlightNodeId: 't1' });
+    await nextTick(); // For Vue reactivity
+    await nextTick(); // For D3 to re-render/update attributes
+
+    highlightedRectT1 = wrapper.find('rect[data-id="t1"][data-highlighted="true"]');
+    expect(highlightedRectT1.exists()).toBe(true);
+    // Check the actual attribute value
+    expect(highlightedRectT1.attributes('data-highlighted')).toBe('true');
+
+
+    highlightedRectT2 = wrapper.find('rect[data-id="t2"][data-highlighted="true"]');
+    expect(highlightedRectT2.exists()).toBe(false);
+     // Also check its data-highlighted attribute is 'false' or not present if that's the logic
+    const nonHighlightedRectT2 = wrapper.find('rect[data-id="t2"]');
+    expect(nonHighlightedRectT2.attributes('data-highlighted')).toBe('false');
+
+
+    // Update prop to highlight 't2'
+    await wrapper.setProps({ highlightNodeId: 't2' });
+    await nextTick();
+    await nextTick();
+
+    highlightedRectT1 = wrapper.find('rect[data-id="t1"][data-highlighted="true"]');
+    expect(highlightedRectT1.exists()).toBe(false);
+    const nonHighlightedRectT1 = wrapper.find('rect[data-id="t1"]');
+    expect(nonHighlightedRectT1.attributes('data-highlighted')).toBe('false');
+
+
+    highlightedRectT2 = wrapper.find('rect[data-id="t2"][data-highlighted="true"]');
+    expect(highlightedRectT2.exists()).toBe(true);
+    expect(highlightedRectT2.attributes('data-highlighted')).toBe('true');
+
+
+    // Update prop to remove highlighting
+    await wrapper.setProps({ highlightNodeId: null });
+    await nextTick();
+    await nextTick();
+
+    highlightedRectT1 = wrapper.find('rect[data-id="t1"][data-highlighted="true"]');
+    expect(highlightedRectT1.exists()).toBe(false);
+    highlightedRectT2 = wrapper.find('rect[data-id="t2"][data-highlighted="true"]');
+    expect(highlightedRectT2.exists()).toBe(false);
+
+    const finalNonHighlightedRectT1 = wrapper.find('rect[data-id="t1"]');
+    expect(finalNonHighlightedRectT1.attributes('data-highlighted')).toBe('false');
+    const finalNonHighlightedRectT2 = wrapper.find('rect[data-id="t2"]');
+    expect(finalNonHighlightedRectT2.attributes('data-highlighted')).toBe('false');
+
+
+    wrapper.unmount(); // Clean up
+  });
+});
