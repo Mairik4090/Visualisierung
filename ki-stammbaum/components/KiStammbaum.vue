@@ -1,3 +1,10 @@
+<template>
+  <div ref="container" class="stammbaum-container">
+    <svg ref="svg"></svg>
+    <div ref="tooltip" class="stammbaum-tooltip"></div>
+  </div>
+</template>
+
 <script setup lang="ts">
   import {
     onMounted,
@@ -1383,3 +1390,24 @@
     },
   );
 </script>
+
+<style scoped>
+.stammbaum-container {
+  width: 100%;
+  height: 600px; /* Or other appropriate default height */
+  position: relative;
+}
+
+.stammbaum-tooltip {
+  position: absolute;
+  opacity: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  padding: 8px;
+  border-radius: 4px;
+  pointer-events: none; /* Important so it doesn't interfere with mouse events on SVG */
+  font-size: 0.9em;
+  z-index: 10;
+  transition: opacity 0.2s;
+}
+</style>
